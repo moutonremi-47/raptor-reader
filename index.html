@@ -133,6 +133,17 @@ details.circ details.day{background:var(--bg)}
 #mdl3 input.secret{font-family:inherit;font-size:1rem}
 #cfgMsg{margin-top:8px;font-size:.9rem}#cfgMsg.er{color:var(--er)}#cfgMsg.ok{color:var(--ok)}
 .ver{font-size:.8rem;color:var(--mut)}
+/* choix de la session à comparer : bien visible */
+#cCmpS{border:2px solid var(--ac);scroll-margin-top:72px}
+#cCmpS .cmpt{font-size:1.05rem}
+#cCmpS .pick{display:block;font-weight:700;margin:12px 0 6px}
+#cCmpS .pickw{position:relative}
+#cCmpS .pickw::after{content:"▼";position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--ac);pointer-events:none;font-size:.9rem}
+#cmpSel{width:100%;min-height:54px;font-size:1rem;font-weight:600;border:2px solid var(--ac);padding:8px 40px 8px 12px;-webkit-appearance:none;appearance:none;background:color-mix(in srgb,var(--ac) 9%,var(--card));text-overflow:ellipsis}
+#cmpSel:focus{outline:3px solid color-mix(in srgb,var(--ac) 45%,transparent)}
+#cCmpS.flash{animation:cflash 1s ease-in-out 3}
+@keyframes cflash{0%,100%{box-shadow:0 0 0 0 transparent}50%{box-shadow:0 0 0 8px color-mix(in srgb,var(--ac) 45%,transparent)}}
+#cmpNow{margin:6px 0 0}
 </style>
 </head>
 <body>
@@ -215,7 +226,7 @@ details.circ details.day{background:var(--bg)}
 <p class="mut noSes card">Ouvre une session depuis l’onglet <b>Sessions</b> ou <b>Boîtier</b>.</p>
 <div id="cAna" hidden>
 <div class="card">
-  <b id="aTitle"></b>
+  <div class="row sp"><b id="aTitle"></b><button id="bGoCmp" class="sec">⚖ Comparer à une autre session</button></div>
   <div class="stats" id="stats"></div>
   <b>Tours</b> <span class="mut" id="lapInfo"></span>
   <div style="overflow-x:auto"><table id="laps"></table></div>
@@ -241,9 +252,10 @@ details.circ details.day{background:var(--bg)}
   <canvas id="cEvo"></canvas>
 </div>
 <div class="card" id="cCmpS">
-  <b>⚖ Comparer deux sessions</b>
-  <p class="mut hint" style="margin:4px 0 8px">Compare cette session à une autre sur le même circuit : temps, secteurs, vitesses et réglages.</p>
-  <select id="cmpSel"></select>
+  <b class="cmpt">⚖ Comparer deux sessions</b>
+  <label class="pick" for="cmpSel">① Choisis la session à comparer avec celle-ci</label>
+  <div class="pickw"><select id="cmpSel"></select></div>
+  <p class="mut" id="cmpNow">Touche la liste pour choisir une autre session : celles du même circuit sont proposées en premier.</p>
   <div class="row" style="margin-top:8px"><select id="cmpBasis" style="flex:1 1 220px;width:auto"><option value="best">Base : meilleurs passages</option><option value="top3">Base : moyenne des meilleurs tours</option></select>
     <label class="ck"><input type="checkbox" id="cmpAll">Afficher aussi les réglages identiques</label></div>
   <div id="cmpOut"></div>
@@ -677,7 +689,7 @@ function why(st){
 }
 var sBusy=false,again=false,sTimer=null,sState="idle",sErr="",okAt=0,pending=0,totalS=0,lastVis=0;
 /* ---------- Configuration partagée : config.json (public) + code chiffré (jeton) ---------- */
-var APP_VER="12",SITE_CFG=null;
+var APP_VER="13",SITE_CFG=null;
 function u8b64(u){var s="";for(var i=0;i<u.length;i++)s+=String.fromCharCode(u[i]);return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}
 function b64u8(t){t=String(t).replace(/-/g,"+").replace(/_/g,"/");while(t.length%4)t+="=";var s=atob(t),u=new Uint8Array(s.length);for(var i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u}
 async function cKey(pass,salt){
@@ -1389,7 +1401,15 @@ $("stOk").onclick=async function(){
   msg(s.setup?"Réglages enregistrés.":"Réglages supprimés.","ok");
 };
 $("bSet").onclick=function(){if(cur)openSetup(cur.s)};
-$("bCmp").onclick=function(){if(!cur)return;tab("Ana");setTimeout(function(){$("cCmpS").scrollIntoView({behavior:"smooth",block:"start"})},150)};
+function goCompare(){
+  if(!cur)return;tab("Ana");
+  setTimeout(function(){
+    var c=$("cCmpS");c.scrollIntoView({behavior:"smooth",block:"start"});
+    c.classList.remove("flash");void c.offsetWidth;c.classList.add("flash");
+    setTimeout(function(){c.classList.remove("flash")},3300);
+  },200);
+}
+$("bCmp").onclick=goCompare;$("bGoCmp").onclick=goCompare;
 
 /* ---------- Comparaison de deux sessions ---------- */
 function avgOf(a){return a.length?a.reduce(function(x,y){return x+y},0)/a.length:0}
@@ -1507,10 +1527,15 @@ $("cmpOut").addEventListener("click",function(e){
   var b=e.target.closest&&e.target.closest("[data-act]");if(!b||!CMP.a)return;
   if(b.dataset.act==="setA")openSetup(cur.s);else if(b.dataset.act==="setB"&&CMP.b)openSetup(allLocal.filter(function(x){return x.id===CMP.b.id})[0]||CMP.b);
 });
+function cmpNowTxt(b){
+  var n=$("cmpNow");
+  if(!b){n.textContent=allLocal.length>1?"Aucune session choisie : touche la liste ci-dessus.":"Il faut au moins deux sessions enregistrées pour comparer.";return}
+  n.textContent="Comparée avec : "+shortLab(b)+". Touche la liste pour en choisir une autre.";
+}
 function renderCmp(force){
   if(!cur||$("cAna").hidden)return;
   var id=$("cmpSel").value,out=$("cmpOut");
-  var b=id?allLocal.filter(function(x){return x.id===id})[0]:null;
+  var b=id?allLocal.filter(function(x){return x.id===id})[0]:null;cmpNowTxt(b);
   if(!b){CMP={on:false};$("vCw").hidden=true;out.innerHTML=allLocal.length>1?'<p class="mut">Choisis une session dans la liste pour la comparer à celle-ci.</p>':'<p class="mut">Il faut au moins deux sessions enregistrées pour comparer.</p>';if(cur.A)drawCmp();return}
   var K=+$("pK").value||10,sig=[cur.s.id,cur.s.mod||0,cur.idx,b.id,b.mod||0,b.line,K,$("cmpBasis").value,$("cmpAll").checked].join("|");
   if(!force&&CMP.sig===sig&&CMP.on){cmpDraw();return}
