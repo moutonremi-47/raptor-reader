@@ -1,5 +1,5 @@
 /* Raptor Reader - service worker : page hors ligne + cache des tuiles de carte */
-var APP="rr-app-v6",TILES="rr-tiles",MAXT=3000;
+var APP="rr-app-v12",TILES="rr-tiles",MAXT=3000;
 var SHELL=["./","index.html","manifest.webmanifest","icon-192.png","icon-512.png",
  "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css",
  "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"];
@@ -14,11 +14,11 @@ self.addEventListener("fetch",function(e){
   var r=e.request,u=new URL(r.url);if(r.method!=="GET")return;
   if(u.hostname==="api.github.com")return;
   var tile=/tile\.openstreetmap\.org|arcgisonline\.com/.test(u.hostname);
-  if(tile){ // tuiles : cache d'abord, réseau sinon
+  if(tile){
     e.respondWith(caches.open(TILES).then(function(c){return c.match(r).then(function(h){return h||fetch(r).then(function(res){if(res.ok||res.type==="opaque"){c.put(r,res.clone());trim()}return res})})}));
     return;
   }
-  if(r.mode==="navigate"||u.origin===location.origin){ // page : réseau d'abord (mises à jour), cache hors ligne
+  if(r.mode==="navigate"||u.origin===location.origin){
     e.respondWith(fetch(r).then(function(res){var cp=res.clone();caches.open(APP).then(function(c){c.put(r,cp)});return res})
       .catch(function(){return caches.match(r).then(function(h){return h||caches.match("index.html")})}));
     return;
