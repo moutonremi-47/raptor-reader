@@ -802,6 +802,21 @@ function parseInfo(dv){
   return o;
 }
 function sid(it){return dev.name+"-"+it.ix+"-"+(it.info&&it.info.start||0)}
+async function readInfo(ix){await ch.info.writeValue(new Uint8Array([ix]));return parseInfo(await ch.info.readValue())}
+/* Mise à jour rapide après effacement : on garde les infos déjà lues et on ne relit que quelques sessions pour vérifier la numérotation. */
+async function fastRefresh(removed,minIx){
+  try{
+    var remaining=box.filter(function(it){return !removed[boxKey(it)]}),n=(await ch.count.readValue()).getUint8(0),tb=await ch.table.readValue();
+    if(n!==remaining.length||tb.byteLength<n)throw new Error("nombre de sessions inattendu");
+    var next=remaining.map(function(it,j){return{ix:tb.getUint8(j),info:it.info}});
+    var sample={};if(next.length){sample[0]=1;sample[next.length-1]=1;
+      for(var j=0;j<next.length;j++)if(next[j].ix>=minIx){sample[j]=1;break}}
+    var ks=Object.keys(sample);
+    for(var q=0;q<ks.length;q++){var it2=next[+ks[q]],real=await readInfo(it2.ix);
+      if(!it2.info||String(real.start)!==String(it2.info.start))throw new Error("numérotation modifiée")}
+    box=next;renderBox();return true;
+  }catch(e){log("fastRefresh: "+(e&&e.message||e));await loadList();return false}
+}
 async function loadList(){
   $("cBox").hidden=false;$("list").innerHTML='<p class="mut">Lecture…</p>';box=[];
   try{
@@ -884,36 +899,33 @@ function boxDelWarn(list){
   else t+="\n\nUne copie reste dans l’historique de cet appareil.";
   return t;
 }
-async function delOne(it){await ch.del.writeValue(new Uint8Array([it.ix]));await new Promise(function(r){setTimeout(r,600)})}
+async function delOne(it){await ch.del.writeValue(new Uint8Array([it.ix]));await new Promise(function(r){setTimeout(r,350)})}
 async function delBox(it){
   if(!dev||!dev.gatt.connected){msg("Le Raptor n’est plus connecté : reconnecte-le d’abord.");return}
   if(busy){msg("Une opération est en cours, patiente quelques secondes.");return}
   if(!confirm(boxDelWarn([it])))return;
-  busy=true;
-  try{await delOne(it);msg("Session "+it.ix+" effacée du boîtier.","ok")}catch(e){msg("Effacement impossible : "+(e&&e.message||e));busy=false;return}
-  busy=false;delete selBox[boxKey(it)];await loadList();
+  busy=true;msg("Effacement de la session "+it.ix+"…","ok");
+  try{await delOne(it)}catch(e){msg("Effacement impossible : "+(e&&e.message||e));busy=false;return}
+  var rm={};rm[boxKey(it)]=1;delete selBox[boxKey(it)];
+  await fastRefresh(rm,it.ix);busy=false;msg("Session "+it.ix+" effacée du boîtier.","ok");
 }
 async function delSel(){
   if(!dev||!dev.gatt.connected){msg("Le Raptor n’est plus connecté : reconnecte-le d’abord.");return}
   if(busy){msg("Une opération est en cours, patiente quelques secondes.");return}
   var list=box.filter(function(it){return selBox[boxKey(it)]});if(!list.length)return;
   if(!confirm(boxDelWarn(list)))return;
-  busy=true;var done=0,fail=0;
-  try{
-    /* Après chaque effacement les numéros peuvent changer : on relit le boîtier et on retrouve les sessions par leur date de début. */
-    var todo={};list.forEach(function(it){todo[boxKey(it)]=1});
-    for(var guard=0;guard<100&&Object.keys(todo).length;guard++){
-      var cur2=box.filter(function(it){return todo[boxKey(it)]})[0];
-      if(!cur2){break}
-      msg("Effacement… "+done+" / "+list.length,"ok");
-      try{await delOne(cur2);done++}catch(e){log("del: "+e);fail++}
-      delete todo[boxKey(cur2)];delete selBox[boxKey(cur2)];
-      busy=false;await loadList();busy=true;
-    }
-  }catch(e){log("delSel: "+e)}
+  /* De la plus récente (numéro le plus haut) à la plus ancienne : les numéros restants ne bougent pas, donc aucune relecture entre deux effacements. */
+  list.sort(function(a,b){return b.ix-a.ix});
+  busy=true;var done=0,fail=0,rm={},minIx=999;
+  for(var i=0;i<list.length;i++){
+    msg("Effacement… "+i+" / "+list.length,"ok");
+    try{await delOne(list[i]);done++;rm[boxKey(list[i])]=1;delete selBox[boxKey(list[i])];if(list[i].ix<minIx)minIx=list[i].ix}
+    catch(e){log("del: "+e);fail++;break}
+  }
+  msg("Mise à jour de la liste…","ok");
+  if(done)await fastRefresh(rm,minIx);else renderBox();
   busy=false;
-  msg(done+" session(s) effacée(s) du boîtier"+(fail?" ("+fail+" échec(s))":"")+".",fail?"er":"ok");
-  if(dev&&dev.gatt.connected)await loadList();
+  msg(done+" session(s) effacée(s) du boîtier"+(fail?" — arrêt sur erreur, "+(list.length-done)+" non effacée(s)":"")+".",fail?"er":"ok");
 }
 $("bDelSel").onclick=delSel;
 $("bSelNone").onclick=function(){selBox={};renderBox()};
