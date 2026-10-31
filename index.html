@@ -126,6 +126,13 @@ details.circ details.day{background:var(--bg)}
 .sw2{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 .warn{background:color-mix(in srgb,#f59f00 18%,var(--card));border-left:4px solid #f59f00;border-radius:8px;padding:8px 10px;margin:8px 0;font-size:.9rem}
 #cmpRead{min-height:1.4em;font-size:.9rem;margin:2px 0 6px}
+#mdl3{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:5000;display:flex;align-items:flex-start;justify-content:center;padding:10px;overflow:auto}
+#mdl3[hidden]{display:none}
+#mdl3 .mbox{background:var(--card);border-radius:14px;padding:16px;width:100%;max-width:520px;box-shadow:0 10px 30px rgba(0,0,0,.4);margin:auto}
+#mdl3 textarea,#mdl3 input[type=text]{width:100%;margin-top:8px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.8rem;word-break:break-all}
+#mdl3 input.secret{font-family:inherit;font-size:1rem}
+#cfgMsg{margin-top:8px;font-size:.9rem}#cfgMsg.er{color:var(--er)}#cfgMsg.ok{color:var(--ok)}
+.ver{font-size:.8rem;color:var(--mut)}
 </style>
 </head>
 <body>
@@ -162,12 +169,16 @@ details.circ details.day{background:var(--bg)}
     <div class="row"><input id="ghO" placeholder="pseudo GitHub" autocomplete="off" autocapitalize="off" spellcheck="false"><input id="ghR" placeholder="nom du dépôt" autocomplete="off" autocapitalize="off" spellcheck="false"><input id="ghT" class="secret" type="text" placeholder="jeton" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
     <div class="row" style="margin-top:8px"><button id="bGh">Synchroniser maintenant</button><label class="ck"><input type="checkbox" id="cAuto" checked>Synchroniser automatiquement</label></div>
     <p class="mut" id="syncInfo" style="margin:6px 0 0"></p>
+    <p class="mut" id="cfgHint" style="margin:6px 0 0" hidden></p>
+    <div class="row" style="margin-top:10px"><button class="sec" id="bCfgOut">📤 Code pour un autre appareil</button><button class="sec" id="bCfgIn">📥 Saisir un code</button></div>
+    <p class="mut" style="margin:6px 0 0">Le code contient le pseudo, le dépôt et le jeton, chiffrés avec une phrase secrète que tu choisis. Il ne sert à rien sans elle.</p>
   </details>
 </div>
 <div class="card">
   <b>Application</b>
   <p class="mut" id="appInfo" style="margin:4px 0 8px"></p>
-  <div class="row"><button id="bInst" hidden>Installer l’application</button><label class="ck"><input type="checkbox" id="cCompact">Affichage compact</label></div>
+  <div class="row"><button id="bInst" hidden>Installer l’application</button><button id="bUpd" class="sec">↻ Mettre à jour l’application</button><label class="ck"><input type="checkbox" id="cCompact">Affichage compact</label></div>
+  <p class="ver" id="verInfo" style="margin:8px 0 0"></p>
 </div>
 <div class="card"><details><summary>Journal technique</summary><pre id="log"></pre></details></div>
 <p class="mut hint">Chrome ou Edge (Android, Windows, macOS, Linux). iPhone : application Bluefy.</p>
@@ -253,6 +264,15 @@ details.circ details.day{background:var(--bg)}
   <div class="row" style="margin-top:10px"><button id="rnOk">Enregistrer</button><button id="rnCancel" class="sec">Annuler</button></div>
 </div></div>
 
+<div id="mdl3" hidden><div class="mbox">
+  <div class="row sp"><b id="cfgTitle"></b><button id="cfgX" class="sec ic" aria-label="Fermer">✕</button></div>
+  <p class="mut" id="cfgHelp" style="margin:6px 0 0"></p>
+  <textarea id="cfgCode" rows="5" placeholder="Code de configuration" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+  <input id="cfgPass" class="secret" type="text" placeholder="Phrase secrète (8 caractères minimum)" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <label class="ck" id="cfgPubW" style="margin-top:10px" hidden><input type="checkbox" id="cfgPub">Inclure aussi le code dans config.json (déverrouillage par phrase secrète sur tous mes appareils)</label>
+  <div id="cfgMsg"></div>
+  <div class="row" style="margin-top:10px"><button id="cfgGo"></button><button id="cfgCopy" class="sec" hidden>Copier le code</button><button id="cfgDl" class="sec" hidden>Télécharger config.json</button></div>
+</div></div>
 <div id="mdl2" hidden><div class="mbox">
   <div class="row sp"><b>🔧 Réglages de la session</b><button id="stX" class="sec ic" aria-label="Fermer">✕</button></div>
   <div class="mut" id="stSess"></div>
@@ -656,6 +676,89 @@ function why(st){
   return"erreur GitHub "+st;
 }
 var sBusy=false,again=false,sTimer=null,sState="idle",sErr="",okAt=0,pending=0,totalS=0,lastVis=0;
+/* ---------- Configuration partagée : config.json (public) + code chiffré (jeton) ---------- */
+var APP_VER="12",SITE_CFG=null;
+function u8b64(u){var s="";for(var i=0;i<u.length;i++)s+=String.fromCharCode(u[i]);return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}
+function b64u8(t){t=String(t).replace(/-/g,"+").replace(/_/g,"/");while(t.length%4)t+="=";var s=atob(t),u=new Uint8Array(s.length);for(var i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u}
+async function cKey(pass,salt){
+  var k=await crypto.subtle.importKey("raw",new TextEncoder().encode(pass),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt:salt,iterations:250000,hash:"SHA-256"},k,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+}
+async function encCfg(obj,pass){
+  var salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12)),key=await cKey(pass,salt);
+  var ct=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv:iv},key,new TextEncoder().encode(JSON.stringify(obj)))),all=new Uint8Array(29+ct.length);
+  all[0]=1;all.set(salt,1);all.set(iv,17);all.set(ct,29);return"RR1."+u8b64(all);
+}
+async function decCfg(code,pass){
+  code=String(code||"").replace(/\s+/g,"");if(code.indexOf("RR1.")!==0)throw new Error("format");
+  var all=b64u8(code.slice(4));if(all[0]!==1||all.length<45)throw new Error("format");
+  var key=await cKey(pass,all.slice(1,17)),pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:all.slice(17,29)},key,all.slice(29));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+var cfgMode="",cfgLast="";
+function cfgMsg(t,k){var m=$("cfgMsg");m.textContent=t||"";m.className=k||""}
+function openCfg(mode,code){
+  cfgMode=mode;cfgLast="";cfgMsg("");$("cfgCode").value=code||"";$("cfgPass").value="";$("cfgCopy").hidden=true;$("cfgDl").hidden=true;$("cfgPubW").hidden=true;$("cfgPub").checked=false;
+  if(!(window.crypto&&crypto.subtle)){msg("Le chiffrement n’est pas disponible ici : ouvre la page en HTTPS (GitHub Pages).");return}
+  if(mode==="out"){
+    if(!ghReady()){msg("Renseigne d’abord le pseudo, le dépôt et le jeton sur cet appareil.");return}
+    $("cfgTitle").textContent="📤 Code pour un autre appareil";
+    $("cfgHelp").textContent="Choisis une phrase secrète longue (plusieurs mots). Tu la saisiras sur l’autre appareil avec le code. Le code peut ensuite voyager par mail, Teams ou OneDrive sans risque.";
+    $("cfgCode").readOnly=true;$("cfgCode").placeholder="Le code apparaîtra ici";$("cfgGo").textContent="Générer le code";$("cfgPubW").hidden=false;
+  }else{
+    $("cfgTitle").textContent="📥 Saisir un code de configuration";
+    $("cfgHelp").textContent="Colle le code généré sur l’autre appareil, puis saisis la phrase secrète.";
+    $("cfgCode").readOnly=false;$("cfgCode").placeholder="Code de configuration (commence par RR1.)";$("cfgGo").textContent="Appliquer";
+  }
+  $("mdl3").hidden=false;setTimeout(function(){(mode==="out"?$("cfgPass"):$("cfgCode").value?$("cfgPass"):$("cfgCode")).focus()},60);
+}
+function closeCfg(){$("mdl3").hidden=true;$("cfgPass").value="";$("cfgCode").value="";cfgLast=""}
+$("cfgX").onclick=closeCfg;$("mdl3").addEventListener("click",function(e){if(e.target===$("mdl3"))closeCfg()});
+$("cfgGo").onclick=async function(){
+  var pass=$("cfgPass").value.trim();
+  if(pass.length<8){cfgMsg("La phrase secrète doit faire au moins 8 caractères.","er");return}
+  $("cfgGo").disabled=true;cfgMsg("Calcul en cours…");
+  try{
+    if(cfgMode==="out"){
+      var c=ghCfg();cfgLast=await encCfg({o:c.o,r:c.r,t:c.t},pass);
+      $("cfgCode").value=cfgLast;$("cfgCopy").hidden=false;$("cfgDl").hidden=false;cfgMsg("Code généré. Garde bien ta phrase secrète : elle n’est enregistrée nulle part.","ok");
+    }else{
+      var o;try{o=await decCfg($("cfgCode").value,pass)}catch(e){cfgMsg("Phrase secrète incorrecte, ou code incomplet.","er");$("cfgGo").disabled=false;return}
+      if(!o||!o.o||!o.r||!o.t){cfgMsg("Code invalide.","er");$("cfgGo").disabled=false;return}
+      $("ghO").value=o.o;$("ghR").value=o.r;$("ghT").value=o.t;ghSave();closeCfg();$("cfgHint").hidden=true;
+      msg("Configuration GitHub appliquée : la synchronisation démarre.","ok");schedule(300);
+    }
+  }catch(e){cfgMsg("Erreur : "+(e&&e.message||e),"er")}
+  $("cfgGo").disabled=false;
+};
+$("cfgCopy").onclick=async function(){
+  try{await navigator.clipboard.writeText(cfgLast);cfgMsg("Code copié.","ok")}
+  catch(e){$("cfgCode").readOnly=false;$("cfgCode").select();cfgMsg("Sélectionne le code et copie-le (appui long → Copier).","ok")}
+};
+$("cfgDl").onclick=function(){
+  var c=ghCfg(),o={o:c.o,r:c.r};if($("cfgPub").checked&&cfgLast)o.c=cfgLast;
+  file("config.json",JSON.stringify(o,null,1)+"\n","application/json");
+  cfgMsg("config.json téléchargé : dépose-le à la racine du dépôt du site (à côté d’index.html).","ok");
+};
+$("bCfgOut").onclick=function(){openCfg("out")};
+$("bCfgIn").onclick=function(){openCfg("in")};
+async function loadSiteCfg(){
+  if(!/^https?:/.test(location.protocol))return;
+  try{
+    var r=await fetch("config.json?t="+Date.now(),{cache:"no-store"});if(!r.ok)return;
+    var j=await r.json();if(!j||typeof j!=="object")return;SITE_CFG=j;
+    var ch=false;
+    if(j.o&&!$("ghO").value.trim()){$("ghO").value=String(j.o);ch=true}
+    if(j.r&&!$("ghR").value.trim()){$("ghR").value=String(j.r);ch=true}
+    if(ch)try{localStorage.rr_gh=JSON.stringify(ghCfg())}catch(e){}
+    var h=$("cfgHint");
+    if(!$("ghT").value.trim()){
+      if(j.c){h.hidden=false;h.innerHTML="";var b=document.createElement("button");b.textContent="🔓 Déverrouiller la configuration du site";b.onclick=function(){openCfg("in",j.c)};h.appendChild(b)}
+      else if(j.o&&j.r){h.hidden=false;h.textContent="Pseudo et dépôt remplis automatiquement. Il reste à saisir le jeton, ou un code reçu d’un autre appareil."}
+    }
+    renderSync();
+  }catch(e){log("config.json: "+e)}
+}
 function goConfig(){tab("Ses");var d=$("dGh");d.open=true;setTimeout(function(){d.scrollIntoView({behavior:"smooth",block:"center"})},80)}
 async function renderSync(){
   var all=[];try{all=await dbAll()}catch(e){}
@@ -1183,7 +1286,7 @@ function toggleFs(force){
   setTimeout(function(){M.map.invalidateSize()},60);
 }
 document.addEventListener("keydown",function(e){
-  if(e.key==="Escape"){if(!$("mdl2").hidden){$("mdl2").hidden=true;stTarget=null;return}if(!$("mdl").hidden){$("mdl").hidden=true;rnTarget=null;return}if($("map").classList.contains("fs"))toggleFs(false)}
+  if(e.key==="Escape"){if(!$("mdl3").hidden){closeCfg();return}if(!$("mdl2").hidden){$("mdl2").hidden=true;stTarget=null;return}if(!$("mdl").hidden){$("mdl").hidden=true;rnTarget=null;return}if($("map").classList.contains("fs"))toggleFs(false)}
   if(!cur||/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;
   if(e.key===" "){playToggle();e.preventDefault();return}
   if(e.key==="ArrowRight"||e.key==="ArrowLeft"){stopPlay();selectPoint((cur.sel==null?0:cur.sel)+(e.key==="ArrowRight"?1:-1),true);e.preventDefault()}
@@ -1470,6 +1573,17 @@ window.addEventListener("appinstalled",function(){$("bInst").hidden=true;appInfo
 $("bInst").onclick=async function(){if(!dP)return;dP.prompt();try{await dP.userChoice}catch(e){}dP=null;$("bInst").hidden=true};
 if("serviceWorker" in navigator&&/^https?:/.test(location.protocol))navigator.serviceWorker.register("sw.js").catch(function(e){log("sw: "+e)});
 if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
+$("verInfo").textContent="Version "+APP_VER+" · tes sessions, noms et réglages ne sont jamais touchés par la mise à jour.";
+$("bUpd").onclick=async function(){
+  $("bUpd").disabled=true;msg("Mise à jour en cours…","ok");
+  try{
+    if("serviceWorker" in navigator){var rs=await navigator.serviceWorker.getRegistrations();for(var i=0;i<rs.length;i++)await rs[i].unregister()}
+    if(window.caches){var ks=await caches.keys();for(var j=0;j<ks.length;j++)if(ks[j].indexOf("rr-app")===0)await caches.delete(ks[j])}
+    if(/^https?:/.test(location.protocol))await fetch(location.pathname,{cache:"reload"}).catch(function(){});
+  }catch(e){log("update: "+e)}
+  location.replace(location.pathname+"?u="+Date.now());
+};
+loadSiteCfg();
 lastVis=Date.now();
 refreshLocal().then(function(all){var t="";try{t=sessionStorage.rr_tab||""}catch(e){}tab(t==="Box"||t==="Ses"?t:(all&&all.length?"Ses":"Box"));schedule(2500)});
 </script>
