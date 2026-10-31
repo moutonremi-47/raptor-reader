@@ -142,6 +142,7 @@ details.circ details.day{background:var(--bg)}
 </div>
 <div class="card" id="cBox" hidden>
   <div class="row sp"><b>Sur le boîtier</b><span class="row"><button id="bDlAll">Tout télécharger</button><button id="bRef" class="sec">Actualiser</button></span></div>
+  <div class="row" id="selBar" style="margin-top:8px" hidden><button id="bDelSel" class="dg"></button><button id="bSelNone" class="sec">Tout décocher</button></div>
   <div id="list"></div>
 </div>
 </section>
@@ -813,19 +814,32 @@ async function loadList(){
     await refreshLocal();
   }catch(e){log("list: "+e);msg("Lecture des sessions impossible : "+(e&&e.message||e))}
 }
+var selBox={};
+function boxKey(it){return it.info&&it.info.start?String(it.info.start):""}
+function updSel(){
+  var n=Object.keys(selBox).length,bar=$("selBar");bar.hidden=!n;
+  $("bDelSel").textContent="🗑 Effacer du boîtier la sélection ("+n+")";
+}
 function renderBox(){
-  var L=$("list");L.innerHTML="";if(!dev||!box.length){if(dev)L.innerHTML='<p class="mut">Aucune session sur le boîtier.</p>';return}
+  var L=$("list");L.innerHTML="";if(!dev||!box.length){if(dev)L.innerHTML='<p class="mut">Aucune session sur le boîtier.</p>';selBox={};updSel();return}
+  var keys={};box.forEach(function(it){keys[boxKey(it)]=1});Object.keys(selBox).forEach(function(k){if(!keys[k])delete selBox[k]});
   box.forEach(function(it){
-    var r=document.createElement("div"),l=document.createElement("div"),inf=it.info,id=sid(it),sv=saved[id];r.className="it";
+    var r=document.createElement("div"),l=document.createElement("div"),inf=it.info,id=sid(it),sv=saved[id],bk=boxKey(it);r.className="it";
     var dur=inf&&inf.start&&inf.end?" · "+Math.round((inf.end-inf.start)/60000)+" min":"";
+    var cb=document.createElement("input");cb.type="checkbox";cb.checked=!!selBox[bk];cb.disabled=!bk;cb.setAttribute("aria-label","Sélectionner la session "+it.ix);
+    cb.style.cssText="width:22px;height:22px;margin:0 10px 0 0;flex:none";
+    cb.onchange=function(){if(cb.checked)selBox[bk]=1;else delete selBox[bk];updSel()};
     l.innerHTML="<b></b><div class='mut'></div>";l.firstChild.textContent="Session "+it.ix;
     if(sv){var t=document.createElement("span");t.className="tag";t.textContent="enregistrée";l.firstChild.appendChild(t)}
+    else{var t2=document.createElement("span");t2.className="tag";t2.style.background="#f59f00";t2.textContent="non enregistrée";l.firstChild.appendChild(t2)}
     l.lastChild.textContent=inf?fdate(inf.start)+" · "+inf.points+" points"+dur:"infos indisponibles";
+    var wrap=document.createElement("div");wrap.style.cssText="display:flex;align-items:center;flex:1 1 200px;min-width:0";l.style.minWidth="0";wrap.appendChild(cb);wrap.appendChild(l);
     var g=document.createElement("span");g.className="row";
     var b=document.createElement("button");b.textContent=sv?"Re-télécharger":"Télécharger";b.onclick=function(){dlOne(it)};
-    var d=document.createElement("button");d.textContent="Effacer du boîtier";d.className="dg";d.disabled=!sv;d.onclick=function(){delBox(it)};
-    g.appendChild(b);g.appendChild(d);r.appendChild(l);r.appendChild(g);L.appendChild(r);
+    var d=document.createElement("button");d.textContent="Effacer";d.className="dg";d.title="Effacer du boîtier";d.setAttribute("aria-label","Effacer la session "+it.ix+" du boîtier");d.onclick=function(){delBox(it)};
+    g.appendChild(b);g.appendChild(d);r.appendChild(wrap);r.appendChild(g);L.appendChild(r);
   });
+  updSel();
 }
 async function fetchSession(it){
   if(busy)return null;busy=true;
@@ -863,11 +877,46 @@ async function dlAll(){
   for(var it of box){if(saved[sid(it)])continue;var s=await fetchSession(it);if(s){await dbPut(s);saved[s.id]=true;n++}else break}
   msg(n+" session(s) téléchargée(s) et enregistrée(s).","ok");await refreshLocal();
 }
-async function delBox(it){
-  if(!saved[sid(it)]){msg("Télécharge d’abord la session pour en garder une copie.");return}
-  if(!confirm("Effacer définitivement la session "+it.ix+" du boîtier ? Une copie reste dans l’historique de ce navigateur."))return;
-  try{await ch.del.writeValue(new Uint8Array([it.ix]));msg("Commande d’effacement envoyée.","ok");await loadList()}catch(e){msg("Effacement impossible : "+(e&&e.message||e))}
+function boxDelWarn(list){
+  var un=list.filter(function(it){return !saved[sid(it)]}),n=list.length;
+  var t=n===1?"Effacer définitivement la session "+list[0].ix+" du boîtier ?":"Effacer définitivement ces "+n+" sessions du boîtier ?";
+  if(un.length)t+="\n\n⚠ "+(un.length===1?"Cette session n’est":un.length+" de ces sessions ne sont")+" PAS enregistrée"+(un.length>1?"s":"")+" sur cet appareil : "+(un.length===1?"elle sera":"elles seront")+" perdue"+(un.length>1?"s":"")+" pour toujours, sans aucune copie.";
+  else t+="\n\nUne copie reste dans l’historique de cet appareil.";
+  return t;
 }
+async function delOne(it){await ch.del.writeValue(new Uint8Array([it.ix]));await new Promise(function(r){setTimeout(r,600)})}
+async function delBox(it){
+  if(!dev||!dev.gatt.connected){msg("Le Raptor n’est plus connecté : reconnecte-le d’abord.");return}
+  if(busy){msg("Une opération est en cours, patiente quelques secondes.");return}
+  if(!confirm(boxDelWarn([it])))return;
+  busy=true;
+  try{await delOne(it);msg("Session "+it.ix+" effacée du boîtier.","ok")}catch(e){msg("Effacement impossible : "+(e&&e.message||e));busy=false;return}
+  busy=false;delete selBox[boxKey(it)];await loadList();
+}
+async function delSel(){
+  if(!dev||!dev.gatt.connected){msg("Le Raptor n’est plus connecté : reconnecte-le d’abord.");return}
+  if(busy){msg("Une opération est en cours, patiente quelques secondes.");return}
+  var list=box.filter(function(it){return selBox[boxKey(it)]});if(!list.length)return;
+  if(!confirm(boxDelWarn(list)))return;
+  busy=true;var done=0,fail=0;
+  try{
+    /* Après chaque effacement les numéros peuvent changer : on relit le boîtier et on retrouve les sessions par leur date de début. */
+    var todo={};list.forEach(function(it){todo[boxKey(it)]=1});
+    for(var guard=0;guard<100&&Object.keys(todo).length;guard++){
+      var cur2=box.filter(function(it){return todo[boxKey(it)]})[0];
+      if(!cur2){break}
+      msg("Effacement… "+done+" / "+list.length,"ok");
+      try{await delOne(cur2);done++}catch(e){log("del: "+e);fail++}
+      delete todo[boxKey(cur2)];delete selBox[boxKey(cur2)];
+      busy=false;await loadList();busy=true;
+    }
+  }catch(e){log("delSel: "+e)}
+  busy=false;
+  msg(done+" session(s) effacée(s) du boîtier"+(fail?" ("+fail+" échec(s))":"")+".",fail?"er":"ok");
+  if(dev&&dev.gatt.connected)await loadList();
+}
+$("bDelSel").onclick=delSel;
+$("bSelNone").onclick=function(){selBox={};renderBox()};
 
 /* ---------- Carte ---------- */
 function initMap(){
