@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Raptor Reader</title>
+<meta name="theme-color" content="#e8590c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b1f24;--mut:#667085;--ac:#e8590c;--bd:#e2e5ea;--ok:#2b8a3e;--er:#c92a2a}
+@media (prefers-color-scheme:dark){:root{--bg:#14161a;--card:#1e2126;--tx:#eceef1;--mut:#9aa3af;--ac:#ff8a4c;--bd:#2d3239;--ok:#51cf66;--er:#ff6b6b;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:900px;margin:0 auto;padding:14px}
+h1{font-size:1.4rem;margin:6px 0 2px}.sub{color:var(--mut);margin:0 0 14px;font-size:.9rem}
+h3{margin:18px 0 6px;font-size:1.1rem}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+button,select{font:inherit;border-radius:8px;padding:8px 12px}
+button{border:0;background:var(--ac);color:#fff;cursor:pointer;font-weight:600}
+button.sec{background:transparent;color:var(--ac);border:1px solid var(--ac)}
+button.dg{background:transparent;color:var(--er);border:1px solid var(--er)}
+button:disabled{opacity:.5}
+select{background:var(--card);color:var(--tx);border:1px solid var(--bd)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.sp{justify-content:space-between}
+.it{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--bd);flex-wrap:wrap}
+.it:first-child{border-top:0}
+.mut{color:var(--mut);font-size:.88rem}
+#msg{position:sticky;top:0;z-index:2000}
+.msg{padding:10px 12px;border-radius:8px;margin-bottom:12px;font-size:.92rem}
+.msg.er{background:color-mix(in srgb,var(--er) 14%,transparent);color:var(--er)}
+.msg.ok{background:color-mix(in srgb,var(--ok) 14%,transparent);color:var(--ok)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin:10px 0}
+.stat{background:var(--bg);border-radius:8px;padding:6px 10px}.stat b{display:block;font-size:1.1rem}
+#map{height:420px;border-radius:10px;margin:10px 0;z-index:0}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+th,td{padding:6px 4px;white-space:nowrap;text-align:right;border-top:1px solid var(--bd)}th:first-child,td:first-child{text-align:left}
+tr.lap{cursor:pointer}tr.best{color:var(--ok);font-weight:700}tr.sel td{background:color-mix(in srgb,#1c7ed6 14%,transparent)}
+canvas{width:100%;height:150px;display:block;cursor:crosshair}
+pre{background:var(--bg);padding:8px;border-radius:8px;max-height:180px;overflow:auto;font-size:.78rem;white-space:pre-wrap;word-break:break-all}
+summary{cursor:pointer;color:var(--mut);font-size:.9rem}
+input{font:inherit;padding:8px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx);min-width:0;flex:1 1 140px}
+input[type=checkbox]{flex:none;width:auto;padding:0;margin:0 4px 0 0}
+label.ck{display:inline-flex;align-items:center;font-size:.9rem;margin-right:10px}
+.sw{display:inline-block;width:18px;height:4px;border-radius:2px;margin-right:5px}
+.stat b{font-size:1rem;overflow-wrap:anywhere}
+.pt{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+.tag{font-size:.75rem;background:var(--ok);color:#fff;border-radius:6px;padding:1px 6px;margin-left:6px}
+.tip{background:var(--bg);border-left:4px solid var(--er);border-radius:8px;padding:8px 10px;margin:6px 0;cursor:pointer;font-size:.92rem}
+.tip b{color:var(--er)}.tip.good{border-left-color:var(--ok)}.tip.good b{color:var(--ok)}
+td.lo{color:var(--er)}td.gd{color:var(--ok);font-weight:700}
+.bar{display:inline-block;height:8px;border-radius:4px;background:var(--er);vertical-align:middle}
+.leaflet-tooltip.sl{padding:0 4px;font-size:11px;font-weight:700}
+body{padding-bottom:calc(66px + env(safe-area-inset-bottom))}
+h2{font-size:1.2rem;margin:6px 0 10px}
+button,select{min-height:44px}
+.step button{min-width:52px;font-size:1.05rem}
+section.tab{display:none}section.tab.on{display:block}
+nav#tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--bd);z-index:2500;padding-bottom:env(safe-area-inset-bottom)}
+nav#tabs button{flex:1;background:none;color:var(--mut);border-radius:0;padding:6px 2px;font-size:.75rem;font-weight:600;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-height:58px}
+nav#tabs button span{font-size:1.35rem;line-height:1.1}
+nav#tabs button.on{color:var(--ac);box-shadow:inset 0 3px 0 var(--ac)}
+#map{height:min(60vh,600px);min-height:300px}
+#map.fs{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;z-index:3000;border-radius:0;margin:0}
+canvas{touch-action:pan-y;height:170px}
+.lc{background:var(--card);color:var(--tx);border-radius:8px;padding:4px;box-shadow:0 1px 5px rgba(0,0,0,.4);display:flex;gap:4px;align-items:center}
+.lc button{min-width:44px;padding:6px 10px}.lc select{min-height:40px;padding:4px}
+.lc.inf{padding:6px 10px;font-size:.9rem;font-weight:600;display:block}
+.lc.inf:empty{display:none}
+body.compact main{padding:8px}body.compact .card{padding:8px;margin-bottom:8px}
+body.compact .hint,body.compact .sub{display:none}
+body.compact .stats{gap:4px;grid-template-columns:repeat(auto-fit,minmax(92px,1fr))}
+body.compact .stat{padding:4px 6px}body.compact .stat b{font-size:.9rem}body.compact .stat .mut{font-size:.75rem}
+body.compact canvas{height:130px}body.compact #map{height:min(50vh,520px)}
+</style>
+</head>
+<body>
+<main>
+<div id="msg"></div>
+<section class="tab" id="tBox">
+<h1>⏱ Raptor Reader</h1>
+<p class="sub">Sessions GPS de ton Masterise Raptor 2 en Bluetooth : carte, tours, analyse de progression, historique. Sans serveur ni compte.</p>
+<div class="card">
+  <div class="row"><button id="bConn">Connecter le Raptor</button><button id="bAll" class="sec">Tous les appareils</button></div>
+  <p class="mut" id="devInfo" style="margin:8px 0 0">Allume le Raptor, active le Bluetooth, puis touche Connecter.</p>
+  <details id="dSet" hidden><summary>Réglages du boîtier (lecture seule)</summary><pre id="setv"></pre></details>
+</div>
+<div class="card" id="cBox" hidden>
+  <div class="row sp"><b>Sur le boîtier</b><span class="row"><button id="bDlAll">Tout télécharger</button><button id="bRef" class="sec">Actualiser</button></span></div>
+  <div id="list"></div>
+</div>
+</section>
+<section class="tab" id="tSes">
+<h2>Sessions</h2>
+<div class="card">
+  <b>Historique enregistré sur cet appareil</b>
+  <div id="local"><p class="mut">Aucune session enregistrée.</p></div>
+</div>
+<div class="card" id="cBk">
+  <b>Sauvegarde à long terme</b>
+  <p class="mut" id="bkInfo" style="margin:4px 0 8px"></p>
+  <div class="row"><button id="bShare">Envoyer vers Drive / Gmail…</button><button id="bBk" class="sec">Fichier JSON</button><button id="bIm" class="sec">Importer</button><input type="file" id="fIm" accept=".json" hidden></div>
+  <details style="margin-top:10px"><summary>Sauvegarde automatique sur GitHub (dépôt privé)</summary>
+    <p class="mut">1) Crée un dépôt <b>privé</b> avec un fichier README. 2) GitHub → Settings → Developer settings → Fine-grained tokens : accès limité à ce seul dépôt, permission « Contents : Read and write ». 3) Renseigne les champs. Le jeton reste dans ce navigateur. « Synchroniser » envoie les sessions manquantes et récupère celles des autres appareils.</p>
+    <div class="row"><input id="ghO" placeholder="pseudo GitHub" autocomplete="off"><input id="ghR" placeholder="nom du dépôt" autocomplete="off"><input id="ghT" type="password" placeholder="jeton" autocomplete="off"></div>
+    <div class="row" style="margin-top:8px"><button id="bGh">Synchroniser</button></div>
+  </details>
+</div>
+<div class="card">
+  <b>Application</b>
+  <p class="mut" id="appInfo" style="margin:4px 0 8px"></p>
+  <div class="row"><button id="bInst" hidden>Installer l’application</button><label class="ck"><input type="checkbox" id="cCompact">Affichage compact</label></div>
+</div>
+<div class="card"><details><summary>Journal technique</summary><pre id="log"></pre></details></div>
+<p class="mut hint">Chrome ou Edge (Android, Windows, macOS, Linux). iPhone : application Bluefy.</p>
+</section>
+<section class="tab" id="tMap">
+<p class="mut noSes card">Ouvre une session depuis l’onglet <b>Sessions</b> ou <b>Boîtier</b>.</p>
+<div id="cSes" hidden><div class="card">
+  <b id="sTitle"></b>
+  <div class="row" style="margin-top:8px">
+    <select id="mLap" hidden></select>
+    <select id="mCol"><option value="v">Couleur vitesse</option><option value="u">Couleur unie</option><option value="n">Tracé complet masqué</option></select>
+    <button id="bLine" class="sec">Placer la ligne d’arrivée</button>
+  </div>
+  <div class="row" id="legend" style="margin-top:8px" hidden>
+    <label class="ck"><input type="checkbox" id="vB" checked><span class="sw" style="background:#2b8a3e"></span>Meilleur tour</label>
+    <label class="ck"><input type="checkbox" id="vI" checked><span class="sw" style="background:#d6336c"></span>Idéale</label>
+    <label class="ck"><input type="checkbox" id="vA" checked><span class="sw" style="background:#1c7ed6"></span>Tour analysé</label>
+    <label class="ck"><input type="checkbox" id="vS" checked>Secteurs</label>
+  </div>
+  <div id="map"></div>
+  <p class="mut hint" style="margin:0 0 6px">▶ rejoue le tour choisi ; le rond vert montre où tu étais sur le meilleur tour au même instant. ⛶ met la carte en plein écran.</p>
+  <div class="row sp"><b>Point sélectionné</b><span class="row step"><button class="sec" data-s="-10">−10</button><button class="sec" data-s="-1">◀</button><button class="sec" data-s="1">▶</button><button class="sec" data-s="10">+10</button></span></div>
+  <div class="stats pt" id="ptInfo"></div>
+  <b>Vitesse sur la session (km/h)</b> <span class="mut hint">glisse le doigt sur la courbe</span>
+  <canvas id="chart"></canvas>
+</div></div>
+</section>
+<section class="tab" id="tAna">
+<p class="mut noSes card">Ouvre une session depuis l’onglet <b>Sessions</b> ou <b>Boîtier</b>.</p>
+<div id="cAna" hidden>
+<div class="card">
+  <b id="aTitle"></b>
+  <div class="stats" id="stats"></div>
+  <b>Tours</b> <span class="mut" id="lapInfo"></span>
+  <div style="overflow-x:auto"><table id="laps"></table></div>
+</div>
+<div class="card" id="cProg" hidden>
+  <b>📈 Progresser tour après tour</b>
+  <p class="mut hint" style="margin:4px 0 6px">Le tour est découpé en secteurs. Pour chaque secteur, on garde ton passage le plus rapide : bout à bout, ils forment le <b>tour idéal</b>. Choisis un tour pour voir où il perd du temps.</p>
+  <div class="row">
+    <select id="pLap"></select>
+    <select id="pRef"><option value="i">Comparer au tour idéal</option><option value="b">Comparer au meilleur tour</option></select>
+    <select id="pK"><option value="6">6 secteurs</option><option value="10" selected>10 secteurs</option><option value="15">15 secteurs</option><option value="20">20 secteurs</option></select>
+  </div>
+  <div class="stats" id="pStats"></div>
+  <b>Où tu perds du temps</b> <span class="mut hint">touche un conseil pour le voir sur la carte</span>
+  <div id="tips"></div>
+  <b>Écart cumulé (s)</b> <span class="mut hint">monte = tu perds, descend = tu gagnes · glisse le doigt</span>
+  <canvas id="cDelta"></canvas>
+  <b>Vitesse selon la distance (km/h)</b> <span class="mut"><span class="sw" style="background:#1c7ed6"></span>tour · <span class="sw" id="refSw" style="background:#d6336c"></span><span id="refNm">idéal</span></span>
+  <canvas id="cSpd"></canvas>
+  <b>Secteurs</b>
+  <div style="overflow-x:auto"><table id="sect"></table></div>
+  <b>Évolution de tes temps</b> <span class="mut hint">touche une barre pour analyser ce tour</span>
+  <canvas id="cEvo"></canvas>
+</div>
+<div class="card"><b>Exports</b><div class="row" style="margin-top:8px"><button id="bGpx">GPX</button><button id="bCsv" class="sec">CSV points</button><button id="bLcsv" class="sec">CSV tours</button></div></div>
+</div>
+</section>
+</main>
+<nav id="tabs"><button data-t="Box"><span>📡</span>Boîtier</button><button data-t="Ses"><span>🗂</span>Sessions</button><button data-t="Map"><span>🗺</span>Carte</button><button data-t="Ana"><span>📈</span>Analyse</button></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+//CORE-START
+function mkDate(d,t){
+  var m=/^(\d\d)(\d\d)(\d\d)$/.exec((d||"").trim()),p=(t||"").trim().split("."),h=/^(\d\d)(\d\d)(\d\d)$/.exec(p[0]||"");
+  if(!m||!h)return null;
+  return Date.UTC(2000+ +m[3],+m[2]-1,+m[1],+h[1],+h[2],+h[3],(parseInt(p[1]||"0",10)||0)*10);
+}
+function parsePoints(txt){
+  var out=[],parts=txt.split("$");
+  for(var i=0;i<parts.length;i++){
+    var p=parts[i].replace(/\*.*$/,"").replace(/\0/g,"").trim();if(!p)continue;
+    var v=p.split(";");if(v.length<5)continue;
+    var lat=parseFloat(v[1]),lon=parseFloat(v[2]),t=mkDate(v[4],v[0]);
+    if(!isFinite(lat)||!isFinite(lon)||t===null)continue;
+    var sp=parseFloat(v[3]),alt=parseFloat(v[5]);
+    out.push({t:t,lat:lat,lon:lon,v:isFinite(sp)?sp*1.852:0,alt:isFinite(alt)?alt:null});
+  }
+  return out;
+}
+function dist(a,b){
+  var r=Math.PI/180,dl=(b.lon-a.lon)*r,dt=(b.lat-a.lat)*r;
+  var x=Math.sin(dt/2)*Math.sin(dt/2)+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dl/2)*Math.sin(dl/2);
+  return 6367*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+function fmtT(ms){var m=Math.floor(ms/60000),s=(ms%60000)/1000;return m+":"+(s<10?"0":"")+s.toFixed(2)}
+function fmtD(ms){return (ms>=0?"+":"−")+Math.abs(ms/1000).toFixed(2)+" s"}
+function defaultIdx(P){for(var i=0;i<P.length;i++)if(P[i].v>15)return i;return 0}
+function computeLaps(P,idx){
+  var n=P.length,o=P[idx],kx=111320*Math.cos(o.lat*Math.PI/180),ky=110540;
+  var Q=function(p){return{x:(p.lon-o.lon)*kx,y:(p.lat-o.lat)*ky}};
+  var a=Q(P[Math.max(0,idx-3)]),b=Q(P[Math.min(n-1,idx+3)]),dx=b.x-a.x,dy=b.y-a.y,l=Math.hypot(dx,dy)||1;
+  dx/=l;dy/=l;var L=25,A={x:-dy*L,y:dx*L},B={x:dy*L,y:-dx*L};
+  var cr=[];
+  for(var k=0;k<n-1;k++){
+    var p=Q(P[k]),q=Q(P[k+1]),rx=q.x-p.x,ry=q.y-p.y,sx=B.x-A.x,sy=B.y-A.y,d=rx*sy-ry*sx;
+    if(!d)continue;
+    var u=((A.x-p.x)*sy-(A.y-p.y)*sx)/d,w=((A.x-p.x)*ry-(A.y-p.y)*rx)/d;
+    if(u>=0&&u<1&&w>=0&&w<=1&&rx*dx+ry*dy>0){
+      var t=P[k].t+u*(P[k+1].t-P[k].t);
+      if(!cr.length||t-cr[cr.length-1].t>5000)cr.push({t:t,k:k});
+    }
+  }
+  var laps=[];
+  for(var j=0;j+1<cr.length;j++){
+    var i0=cr[j].k+1,i1=cr[j+1].k,d2=0,vm=0;
+    for(var m=i0;m<=i1;m++){if(m>i0)d2+=dist(P[m-1],P[m]);if(P[m].v>vm)vm=P[m].v}
+    var ms=cr[j+1].t-cr[j].t;
+    laps.push({n:j+1,ms:ms,i0:i0,i1:i1,dist:d2,vmax:vm,vavg:d2/(ms/3600000)});
+  }
+  var ll=function(pt){return{lat:o.lat+pt.y/ky,lon:o.lon+pt.x/kx}};
+  return{cross:cr,laps:laps,A:ll(A),B:ll(B)};
+}
+/* ---- Analyse de progression : tour idéal, secteurs, écarts ---- */
+function toXY(p,o){return{x:(p.lon-o.lon)*111320*Math.cos(o.lat*Math.PI/180),y:(p.lat-o.lat)*110540}}
+function lapTrack(P,c0,c1,o){
+  function ip(c){var p=P[c.k],q=P[c.k+1],f=(c.t-p.t)/((q.t-p.t)||1);
+    return{t:c.t,lat:p.lat+f*(q.lat-p.lat),lon:p.lon+f*(q.lon-p.lon),v:p.v+f*(q.v-p.v),gi:f<.5?c.k:c.k+1}}
+  var pts=[ip(c0)];
+  for(var m=c0.k+1;m<=c1.k;m++){var p=P[m];pts.push({t:p.t,lat:p.lat,lon:p.lon,v:p.v,gi:m})}
+  pts.push(ip(c1));
+  var t0=pts[0].t,s=0;
+  pts.forEach(function(p,i){var q=toXY(p,o);p.x=q.x;p.y=q.y;if(i)s+=Math.hypot(p.x-pts[i-1].x,p.y-pts[i-1].y);p.s=s;p.t-=t0});
+  return pts;
+}
+function project(tr,ref){
+  var n=ref.length,last=0,prev=0,Lr=ref[n-1].s;
+  tr.forEach(function(p,i){
+    var bk=last,bf=0,bd=1e18;
+    for(var k=Math.max(0,last-3);k<Math.min(n-1,last+80);k++){
+      var a=ref[k],b=ref[k+1],dx=b.x-a.x,dy=b.y-a.y,l2=dx*dx+dy*dy,f=l2?((p.x-a.x)*dx+(p.y-a.y)*dy)/l2:0;
+      f=Math.max(0,Math.min(1,f));var d=Math.hypot(a.x+f*dx-p.x,a.y+f*dy-p.y);
+      if(d<bd){bd=d;bk=k;bf=f}
+    }
+    var sr=ref[bk].s+bf*(ref[bk+1].s-ref[bk].s);
+    if(i===0)sr=0;if(i===tr.length-1)sr=Lr;
+    sr=Math.max(sr,prev);prev=sr;last=bk;p.sr=sr;p.off=bd;
+  });
+}
+function at(tr,s,key){
+  var lo=0,hi=tr.length-1;
+  if(s<=tr[0].sr)return tr[0][key];if(s>=tr[hi].sr)return tr[hi][key];
+  while(hi-lo>1){var m=(lo+hi)>>1;if(tr[m].sr<s)lo=m;else hi=m}
+  var a=tr[lo],b=tr[hi],f=(s-a.sr)/((b.sr-a.sr)||1);return a[key]+f*(b[key]-a[key]);
+}
+function analyze(P,R,K){
+  if(!R.laps.length)return null;
+  var o=P[0],tr=[],j,k;
+  for(j=0;j<R.laps.length;j++)tr.push(lapTrack(P,R.cross[j],R.cross[j+1],o));
+  var bi=0;R.laps.forEach(function(l,i){if(l.ms<R.laps[bi].ms)bi=i});
+  var ref=tr[bi],Lr=ref[ref.length-1].s;
+  ref.forEach(function(p){p.sr=p.s;p.off=0});
+  tr.forEach(function(t,i){if(i!==bi)project(t,ref)});
+  var b=[];for(k=0;k<=K;k++)b.push(Lr*k/K);
+  var T=tr.map(function(t){return b.map(function(s){return at(t,s,"t")})});
+  var sect=T.map(function(x){var r=[];for(var q=0;q<K;q++)r.push(x[q+1]-x[q]);return r});
+  var win=[],cum=[0];
+  for(k=0;k<K;k++){var w=0;for(j=1;j<tr.length;j++)if(sect[j][k]<sect[w][k])w=j;win.push(w);cum.push(cum[k]+sect[w][k])}
+  return{tr:tr,bi:bi,Lr:Lr,K:K,b:b,T:T,sect:sect,win:win,cum:cum,ideal:cum[K]};
+}
+function secOf(A,s){return Math.max(0,Math.min(A.K-1,Math.floor(s/A.Lr*A.K)))}
+function refLap(A,mode,k){return mode==="i"?A.win[k]:A.bi}
+function tRef(A,mode,s){
+  if(mode!=="i")return at(A.tr[A.bi],s,"t");
+  var k=secOf(A,s),w=A.win[k];return A.cum[k]+at(A.tr[w],s,"t")-A.T[w][k];
+}
+function vRef(A,mode,s){return at(A.tr[refLap(A,mode,secOf(A,s))],s,"v")}
+function idealPath(A){
+  var out=[];
+  for(var k=0;k<A.K;k++){
+    var t=A.tr[A.win[k]],lo=A.b[k],hi=A.b[k+1],seg=[[at(t,lo,"lat"),at(t,lo,"lon")]];
+    t.forEach(function(p){if(p.sr>lo&&p.sr<hi)seg.push([p.lat,p.lon])});
+    seg.push([at(t,hi,"lat"),at(t,hi,"lon")]);out.push({k:k,lap:A.win[k],pts:seg});
+  }
+  return out;
+}
+function secStats(A,j,k){
+  var t=A.tr[j],lo=A.b[k],hi=A.b[k+1],ve=at(t,lo,"v"),vx=at(t,hi,"v"),vmin=Math.min(ve,vx),vmax=Math.max(ve,vx);
+  t.forEach(function(p){if(p.sr>lo&&p.sr<hi){if(p.v<vmin)vmin=p.v;if(p.v>vmax)vmax=p.v}});
+  return{ve:ve,vx:vx,vmin:vmin,vmax:vmax};
+}
+function lineGap(A,j,r,k){
+  if(j===r)return 0;var s=0,n=8,a=A.tr[j],b=A.tr[r];
+  for(var i=0;i<n;i++){var x=A.b[k]+(A.b[k+1]-A.b[k])*(i+.5)/n;s+=Math.hypot(at(a,x,"x")-at(b,x,"x"),at(a,x,"y")-at(b,x,"y"))}
+  return s/n;
+}
+function advice(A,j,mode){
+  var tips=[];
+  for(var k=0;k<A.K;k++){
+    var r=refLap(A,mode,k),loss=A.sect[j][k]-A.sect[r][k];if(loss<50)continue;
+    var a=secStats(A,j,k),b=secStats(A,r,k),g=lineGap(A,j,r,k),why=[];
+    if(a.ve<b.ve-2)why.push("tu arrives moins vite ("+a.ve.toFixed(0)+" contre "+b.ve.toFixed(0)+" km/h) : la sortie du secteur précédent compte aussi");
+    if(a.vmin<b.vmin-2)why.push("ta vitesse la plus basse est de "+a.vmin.toFixed(0)+" km/h contre "+b.vmin.toFixed(0)+" : tu freines trop fort ou trop longtemps, garde plus de vitesse au point le plus lent");
+    if(a.vx<b.vx-2)why.push("tu sors moins vite ("+a.vx.toFixed(0)+" contre "+b.vx.toFixed(0)+" km/h) : remets les gaz plus tôt et plus franchement");
+    if(a.vmax<b.vmax-3&&a.vmin>=b.vmin-2)why.push("ta pointe est plus basse ("+a.vmax.toFixed(0)+" contre "+b.vmax.toFixed(0)+" km/h) : freine plus tard");
+    if(g>2)why.push("ta trajectoire s’écarte d’environ "+g.toFixed(0)+" m de la référence : regarde la ligne rose sur la carte");
+    if(!why.length)why.push("écart réparti sur tout le secteur, sans cause nette : vise plus de fluidité");
+    tips.push({k:k,loss:loss,ref:r,why:why});
+  }
+  tips.sort(function(x,y){return y.loss-x.loss});return tips;
+}
+//CORE-END
+var SESS="63ed2065-a35d-f9c3-56d7-9824f926203f",SET="95660def-6c10-d4bd-d7ce-0b67c03b99f6";
+var U={count:"54f3c1f4-e802-436b-8c79-d4d49857a595",table:"b72cdd10-7fcf-53a6-93e6-d2f728e1b6d5",info:"f2648528-f89e-fdac-64fa-f7bbb5aabc61",
+ start:"63dc24ee-ed3b-2ed0-e559-cfd29bbe7820",data:"7a2af5ad-d941-4b52-1d0d-ae5f3ad31a12",del:"5c0dde40-7447-7516-298c-595736dda323"};
+var RO=[["Fréquence GPS","7ebc1e54-a0e7-27ff-693e-8428204d069d"],["Autostart","7aec2e50-a0e7-27ff-693e-8428204d069d"],
+ ["Vitesse autostart","7afd2e50-a0e7-27ff-693e-8428204d069d"],["Durée autostart","7a002e50-a0e7-27ff-693e-8428204d069d"],
+ ["Veille","9af3295f-a3e7-23fe-683e-84282243089d"],["Matériel","9fbad3d2-17db-7caf-1686-7d31538110f7"]];
+var $=function(i){return document.getElementById(i)},td=new TextDecoder("utf-8");
+var dev=null,ch={},box=[],busy=false,cur=null,saved={},lineMode=false,M={};
+var C_BEST="#2b8a3e",C_IDEAL="#d6336c",C_LAP="#1c7ed6";
+function log(t){var l=$("log");l.textContent+=t+"\n";l.scrollTop=l.scrollHeight}
+function msg(t,k){$("msg").innerHTML=t?'<div class="msg '+(k||"er")+'"></div>':"";if(t)$("msg").firstChild.textContent=t}
+function fdate(ms){return ms?new Date(ms).toLocaleString("fr-FR"):"date inconnue"}
+function file(name,data,type){
+  var u=URL.createObjectURL(new Blob([data],{type:type||"text/plain"})),a=document.createElement("a");
+  a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000);
+}
+/* ---------- Historique local (IndexedDB) ---------- */
+function idb(){return new Promise(function(ok,ko){var r=indexedDB.open("raptor",1);r.onupgradeneeded=function(){r.result.createObjectStore("s",{keyPath:"id"})};r.onsuccess=function(){ok(r.result)};r.onerror=function(){ko(r.error)}})}
+function tx(mode,fn){return idb().then(function(d){return new Promise(function(ok,ko){var t=d.transaction("s",mode),r=fn(t.objectStore("s"));t.oncomplete=function(){ok(r.result)};t.onerror=function(){ko(t.error)}})})}
+function dbPut(o){return tx("readwrite",function(s){return s.put(o)})}
+function dbAll(){return tx("readonly",function(s){return s.getAll()})}
+function dbDel(id){return tx("readwrite",function(s){return s.delete(id)})}
+async function refreshLocal(){
+  var all=[];try{all=await dbAll()}catch(e){log("idb: "+e)}
+  all.sort(function(a,b){return b.start-a.start});saved={};all.forEach(function(s){saved[s.id]=true});
+  var L=$("local");L.innerHTML="";
+  if(!all.length)L.innerHTML='<p class="mut">Aucune session enregistrée.</p>';
+  all.forEach(function(s){
+    var r=document.createElement("div");r.className="it";
+    var l=document.createElement("div");l.innerHTML="<b></b><div class='mut'></div>";
+    l.firstChild.textContent=s.dev+" · session "+s.ix;l.lastChild.textContent=fdate(s.start)+" · "+s.pts.length+" points";
+    var g=document.createElement("span");g.className="row";
+    var o=document.createElement("button");o.textContent="Ouvrir";o.onclick=function(){openSession(s)};
+    var x=document.createElement("button");x.textContent="Supprimer";x.className="dg";
+    x.onclick=async function(){if(confirm("Supprimer cette copie locale ?")){await dbDel(s.id);refreshLocal()}};
+    g.appendChild(o);g.appendChild(x);r.appendChild(l);r.appendChild(g);L.appendChild(r);
+  });
+  renderBox();checkBk();return all;
+}
+function stamp(){try{localStorage.rr_last=String(Date.now())}catch(e){}checkBk()}
+function checkBk(){
+  var t=0;try{t=+localStorage.rr_last||0}catch(e){}var n=Object.keys(saved).length;
+  $("bkInfo").textContent=t?"Dernière sauvegarde : "+new Date(t).toLocaleString("fr-FR")+(Date.now()-t>14*864e5&&n?" — pense à en refaire une.":""):
+   (n?"Aucune sauvegarde pour l’instant : fais-en une pour ne rien perdre.":"Rien à sauvegarder pour l’instant.");
+}
+$("bBk").onclick=async function(){var a=await dbAll();if(!a.length){msg("Rien à sauvegarder.");return}file("raptor-sauvegarde.json",JSON.stringify(a),"application/json");stamp()};
+$("bShare").onclick=async function(){
+  var a=await dbAll();if(!a.length){msg("Rien à sauvegarder.");return}
+  var nm="raptor-sauvegarde-"+new Date().toISOString().slice(0,10)+".json",txt=JSON.stringify(a);
+  try{
+    var f=new File([txt],nm,{type:"application/json"});
+    if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:"Sauvegarde Raptor"});stamp();return}
+    var f2=new File([txt],nm,{type:"text/plain"});
+    if(navigator.canShare&&navigator.canShare({files:[f2]})){await navigator.share({files:[f2],title:"Sauvegarde Raptor"});stamp();return}
+  }catch(e){if(e&&e.name==="AbortError")return}
+  file(nm,txt,"application/json");stamp();msg("Fichier téléchargé : envoie-le dans Google Drive (drive.google.com → Importer) ou par mail à ton adresse Gmail.","ok");
+};
+var cfg={};try{cfg=JSON.parse(localStorage.rr_gh||"{}")}catch(e){}
+$("ghO").value=cfg.o||"";$("ghR").value=cfg.r||"";$("ghT").value=cfg.t||"";
+$("bGh").onclick=async function(){
+  var o=$("ghO").value.trim(),r=$("ghR").value.trim(),t=$("ghT").value.trim();
+  if(!o||!r||!t){msg("Renseigne le pseudo, le dépôt et le jeton GitHub.");return}
+  try{localStorage.rr_gh=JSON.stringify({o:o,r:r,t:t})}catch(e){}
+  var base="https://api.github.com/repos/"+encodeURIComponent(o)+"/"+encodeURIComponent(r)+"/contents/sessions",H={Authorization:"Bearer "+t,Accept:"application/vnd.github+json"};
+  try{
+    msg("Synchronisation GitHub…","ok");
+    var res=await fetch(base,{headers:H}),remote=[];
+    if(res.status===200)remote=await res.json();else if(res.status!==404)throw new Error("GitHub "+res.status+" (vérifie le jeton et le nom du dépôt)");
+    var names={},have={},up=0,down=0;remote.forEach(function(f){names[f.name]=1});
+    var all=await dbAll();
+    for(var s of all){have[s.id+".json"]=1;
+      if(!names[s.id+".json"]){
+        var put=await fetch(base+"/"+encodeURIComponent(s.id+".json"),{method:"PUT",headers:H,body:JSON.stringify({message:"Session "+s.id,content:btoa(unescape(encodeURIComponent(JSON.stringify(s))))})});
+        if(!put.ok)throw new Error("envoi refusé ("+put.status+")");up++;
+      }}
+    for(var f of remote){
+      if(have[f.name]||!/\.json$/.test(f.name))continue;
+      var g=await fetch(base+"/"+encodeURIComponent(f.name),{headers:{Authorization:"Bearer "+t,Accept:"application/vnd.github.raw+json"}});
+      if(g.ok){var s2=await g.json();if(s2&&s2.id&&s2.pts){await dbPut(s2);down++}}
+    }
+    msg("GitHub : "+up+" session(s) envoyée(s), "+down+" récupérée(s).","ok");stamp();refreshLocal();
+  }catch(e){msg("Synchronisation impossible : "+(e&&e.message||e))}
+};
+$("bIm").onclick=function(){$("fIm").click()};
+$("fIm").onchange=async function(e){
+  try{var a=JSON.parse(await e.target.files[0].text()),n=0;
+    for(var s of a){if(s&&s.id&&s.pts){await dbPut(s);n++}}
+    msg(n+" session(s) importée(s).","ok");refreshLocal();
+  }catch(x){msg("Fichier de sauvegarde invalide.")}
+  e.target.value="";
+};
+/* ---------- Bluetooth ---------- */
+async function connect(all){
+  msg("");
+  if(!navigator.bluetooth){msg("Ce navigateur ne gère pas le Bluetooth web (Chrome, Edge, ou Bluefy sur iPhone).");return}
+  try{
+    var opt={optionalServices:[SESS,SET]};if(all)opt.acceptAllDevices=true;else opt.filters=[{namePrefix:"Raptor"}];
+    dev=await navigator.bluetooth.requestDevice(opt);
+    $("devInfo").textContent="Connexion à "+dev.name+"…";
+    dev.addEventListener("gattserverdisconnected",function(){$("devInfo").textContent="Déconnecté.";$("cBox").hidden=true});
+    var s=await dev.gatt.connect(),s1=await s.getPrimaryService(SESS),s2=await s.getPrimaryService(SET);
+    ch={};for(var k in U)ch[k]=await s1.getCharacteristic(U[k]);
+    var ex="";
+    try{ex+=" · batterie "+(await(await s2.getCharacteristic("3f04dd0e-f52b-fd98-e81b-a463180ea0cb")).readValue()).getUint8(0)+" %"}catch(e){}
+    try{ex+=" · firmware "+td.decode(await(await s2.getCharacteristic("02f042a0-2a03-131b-4a31-f1485e35d60c")).readValue()).replace(/\0/g,"")}catch(e){}
+    $("devInfo").textContent="Connecté : "+dev.name+ex;
+    var txt="";
+    for(var r of RO){try{var v=await(await s2.getCharacteristic(r[1])).readValue(),b=[];
+      for(var i=0;i<v.byteLength;i++)b.push(v.getUint8(i));
+      txt+=r[0]+" : "+(r[0]==="Matériel"?td.decode(new Uint8Array(b)).replace(/\0/g,""):b.join(" "))+"\n"}catch(e){}}
+    if(txt){$("setv").textContent=txt;$("dSet").hidden=false}
+    await loadList();
+  }catch(e){
+    log("connect: "+e);
+    if(e&&e.name==="NotFoundError")msg("Aucun appareil choisi. Essaie « Tous les appareils ».");
+    else if(e&&e.name==="SecurityError")msg("Bluetooth bloqué : ouvre cette page directement dans Chrome (fichier local ou hébergée), pas dans une autre application.");
+    else msg("Échec de connexion : "+(e&&e.message||e));
+  }
+}
+function parseInfo(dv){
+  var n=dv.getUint32(2,false),t=td.decode(new Uint8Array(dv.buffer,dv.byteOffset+6,Math.max(0,dv.byteLength-6))).replace(/\0/g,"").replace("$",""),v=t.split(";"),o={points:n,raw:t};
+  if(v.length>=6){o.start=mkDate(v[3],v[0]);o.end=mkDate(v[5],v[4])}
+  return o;
+}
+function sid(it){return dev.name+"-"+it.ix+"-"+(it.info&&it.info.start||0)}
+async function loadList(){
+  $("cBox").hidden=false;$("list").innerHTML='<p class="mut">Lecture…</p>';box=[];
+  try{
+    var n=(await ch.count.readValue()).getUint8(0),tb=await ch.table.readValue();
+    for(var i=0;i<n&&i<tb.byteLength;i++){
+      var ix=tb.getUint8(i),info=null;
+      try{await ch.info.writeValue(new Uint8Array([ix]));info=parseInfo(await ch.info.readValue());log("info "+ix+": "+info.raw)}catch(e){log("info "+ix+": "+e)}
+      box.push({ix:ix,info:info});
+    }
+    await refreshLocal();
+  }catch(e){log("list: "+e);msg("Lecture des sessions impossible : "+(e&&e.message||e))}
+}
+function renderBox(){
+  var L=$("list");L.innerHTML="";if(!dev||!box.length){if(dev)L.innerHTML='<p class="mut">Aucune session sur le boîtier.</p>';return}
+  box.forEach(function(it){
+    var r=document.createElement("div"),l=document.createElement("div"),inf=it.info,id=sid(it),sv=saved[id];r.className="it";
+    var dur=inf&&inf.start&&inf.end?" · "+Math.round((inf.end-inf.start)/60000)+" min":"";
+    l.innerHTML="<b></b><div class='mut'></div>";l.firstChild.textContent="Session "+it.ix;
+    if(sv){var t=document.createElement("span");t.className="tag";t.textContent="enregistrée";l.firstChild.appendChild(t)}
+    l.lastChild.textContent=inf?fdate(inf.start)+" · "+inf.points+" points"+dur:"infos indisponibles";
+    var g=document.createElement("span");g.className="row";
+    var b=document.createElement("button");b.textContent=sv?"Re-télécharger":"Télécharger";b.onclick=function(){dlOne(it)};
+    var d=document.createElement("button");d.textContent="Effacer du boîtier";d.className="dg";d.disabled=!sv;d.onclick=function(){delBox(it)};
+    g.appendChild(b);g.appendChild(d);r.appendChild(l);r.appendChild(g);L.appendChild(r);
+  });
+}
+async function fetchSession(it){
+  if(busy)return null;busy=true;
+  var buf="",last=Date.now(),got=0,total=it.info?it.info.points:0,t0=Date.now();
+  var on=function(ev){var v=ev.target.value;buf+=td.decode(new Uint8Array(v.buffer,v.byteOffset,v.byteLength));last=Date.now();got++};
+  try{
+    ch.data.addEventListener("characteristicvaluechanged",on);
+    await ch.data.startNotifications();
+    await ch.start.writeValue(new Uint8Array([it.ix]));
+    while(true){
+      await new Promise(function(r){setTimeout(r,300)});
+      var n=(buf.match(/\$/g)||[]).length;
+      msg("Session "+it.ix+" : "+n+(total?" / "+total:"")+" points reçus…","ok");
+      if(total&&n>=total)break;
+      if(Date.now()-last>3000&&(got>0||Date.now()-t0>8000))break;
+      if(Date.now()-t0>600000)break;
+    }
+  }catch(e){log("dl: "+e);msg("Téléchargement interrompu : "+(e&&e.message||e))}
+  try{ch.data.removeEventListener("characteristicvaluechanged",on);await ch.data.stopNotifications()}catch(e){}
+  busy=false;log("brut: "+buf.slice(0,200));
+  var pts=parsePoints(buf);
+  if(!pts.length){msg("Aucun point décodé (voir le journal technique).");return null}
+  return{id:sid(it),dev:dev.name,ix:it.ix,start:it.info&&it.info.start||pts[0].t,pts:pts};
+}
+async function dlOne(it){
+  var s=await fetchSession(it);if(!s)return;
+  try{await dbPut(s)}catch(e){msg("Téléchargé mais non enregistré : "+e)}
+  msg("Session "+it.ix+" : "+s.pts.length+" points enregistrés.","ok");await refreshLocal();openSession(s);
+}
+async function dlAll(){
+  var n=0;
+  for(var it of box){if(saved[sid(it)])continue;var s=await fetchSession(it);if(s){await dbPut(s);saved[s.id]=true;n++}else break}
+  msg(n+" session(s) téléchargée(s) et enregistrée(s).","ok");await refreshLocal();
+}
+async function delBox(it){
+  if(!saved[sid(it)]){msg("Télécharge d’abord la session pour en garder une copie.");return}
+  if(!confirm("Effacer définitivement la session "+it.ix+" du boîtier ? Une copie reste dans l’historique de ce navigateur."))return;
+  try{await ch.del.writeValue(new Uint8Array([it.ix]));msg("Commande d’effacement envoyée.","ok");await loadList()}catch(e){msg("Effacement impossible : "+(e&&e.message||e))}
+}
+/* ---------- Affichage d'une session ---------- */
+function initMap(){
+  if(M.map)return true;if(typeof L==="undefined"){msg("La bibliothèque de carte n’a pas pu se charger (connexion Internet requise).");return false}
+  var osm=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,crossOrigin:true,attribution:"© OpenStreetMap"});
+  var sat=L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",{maxZoom:20,maxNativeZoom:18,crossOrigin:true,attribution:"Imagery © Esri"});
+  M.map=L.map("map",{preferCanvas:true,layers:[sat]});L.control.layers({"Satellite":sat,"Plan":osm}).addTo(M.map);
+  M.track=L.layerGroup().addTo(M.map);M.cmp=L.layerGroup().addTo(M.map);M.line=L.layerGroup().addTo(M.map);M.hl=L.layerGroup().addTo(M.map);M.mk=L.layerGroup().addTo(M.map);
+  var Ctl=L.Control.extend({onAdd:function(){var d=L.DomUtil.create("div","lc");d.innerHTML=this.options.html;L.DomEvent.disableClickPropagation(d);L.DomEvent.disableScrollPropagation(d);return d}});
+  new Ctl({position:"topleft",html:'<button id="bFs" title="Plein écran">⛶</button>'}).addTo(M.map);
+  new Ctl({position:"bottomleft",html:'<button id="bPlay" title="Rejouer le tour">▶</button><select id="rSpd"><option value="1">x1</option><option value="2">x2</option><option value="5" selected>x5</option><option value="10">x10</option></select>'}).addTo(M.map);
+  var ic=new Ctl({position:"bottomright",html:""});ic.addTo(M.map);M.info=ic.getContainer();M.info.classList.add("inf");
+  $("bFs").onclick=function(){toggleFs()};$("bPlay").onclick=playToggle;
+  M.map.on("click",function(e){
+    if(!cur)return;var best=nearest(e.latlng);
+    if(lineMode){lineMode=false;$("bLine").textContent="Placer la ligne d’arrivée";cur.idx=best;cur.s.line=best;dbPut(cur.s).catch(function(){});cur.lap=null;recompute()}
+    else selectPoint(best,false);
+  });
+  return true;
+}
+function col(v,mx){return $("mCol").value==="u"?"#e8590c":"hsl("+(240-240*Math.min(v/(mx||1),1))+",90%,50%)"}
+function openSession(s){
+  var li=s.line!=null&&s.line<s.pts.length?s.line:defaultIdx(s.pts);
+  stopPlay();cur={s:s,idx:li,lap:null};$("cSes").hidden=false;$("cAna").hidden=false;
+  Array.prototype.forEach.call(document.querySelectorAll(".noSes"),function(e){e.hidden=true});tab("Map");
+  var P=s.pts,d=0,mx=0;var cum=[];for(var i=0;i<P.length;i++){if(i)d+=dist(P[i-1],P[i]);cum.push(d);if(P[i].v>mx)mx=P[i].v}
+  var sec=(P[P.length-1].t-P[0].t)/1000;cur.mx=mx;cur.cum=cum;cur.sel=null;resetPt();
+  $("sTitle").textContent=$("aTitle").textContent=s.dev+" · session "+s.ix+" · "+fdate(P[0].t);
+  var st=[["Distance",d.toFixed(2)+" km"],["Durée",Math.floor(sec/60)+" min "+Math.round(sec%60)+" s"],["Vitesse max",mx.toFixed(1)+" km/h"],
+   ["Vitesse moy.",sec?(d/(sec/3600)).toFixed(1)+" km/h":"–"],["Points",String(P.length)]];
+  $("stats").innerHTML=st.map(function(x){return'<div class="stat"><span class="mut">'+x[0]+'</span><b>'+x[1]+'</b></div>'}).join("");
+  if(initMap()){setTimeout(function(){M.map.invalidateSize();drawTrack();M.map.fitBounds(P.map(function(p){return[p.lat,p.lon]}))},50)}
+  recompute();
+}
+function drawTrack(){
+  if(!M.map||!cur)return;M.track.clearLayers();if($("mCol").value==="n")return;var P=cur.s.pts;
+  for(var i=1;i<P.length;i++)L.polyline([[P[i-1].lat,P[i-1].lon],[P[i].lat,P[i].lon]],{color:col(P[i].v,cur.mx),weight:5,opacity:.9}).addTo(M.track);
+  var a=P[0],b=P[P.length-1];
+  L.circleMarker([a.lat,a.lon],{radius:7,color:"#fff",fillColor:"#2b8a3e",fillOpacity:1,weight:2}).bindTooltip("Départ").addTo(M.track);
+  L.circleMarker([b.lat,b.lon],{radius:7,color:"#fff",fillColor:"#c92a2a",fillOpacity:1,weight:2}).bindTooltip("Fin").addTo(M.track);
+}
+function recompute(){
+  var P=cur.s.pts;cur.res=computeLaps(P,cur.idx);var R=cur.res;
+  if(M.map){M.line.clearLayers();M.hl.clearLayers();L.polyline([[R.A.lat,R.A.lon],[R.B.lat,R.B.lon]],{color:"#fff",weight:6}).addTo(M.line);
+    L.polyline([[R.A.lat,R.A.lon],[R.B.lat,R.B.lon]],{color:"#e03131",weight:3,dashArray:"6 4"}).bindTooltip("Départ / arrivée").addTo(M.line)}
+  var T=$("laps");
+  if(!R.laps.length){T.innerHTML="";$("lapInfo").textContent="Aucun tour complet détecté : place la ligne sur le tracé.";cur.A=null;$("cProg").hidden=true;$("legend").hidden=true;$("mLap").hidden=true;if(M.cmp)M.cmp.clearLayers();drawChart();return}
+  var best=R.laps.reduce(function(a,b){return b.ms<a.ms?b:a}),avg=R.laps.reduce(function(a,b){return a+b.ms},0)/R.laps.length;
+  var sd=Math.sqrt(R.laps.reduce(function(a,b){return a+Math.pow(b.ms-avg,2)},0)/R.laps.length);
+  $("lapInfo").textContent=R.laps.length+" tour(s) · meilleur "+fmtT(best.ms)+" · moyenne "+fmtT(avg)+" · écart-type "+(sd/1000).toFixed(2)+" s";
+  analyzeNow();
+}
+/* ---------- Progression ---------- */
+function analyzeNow(){
+  var R=cur.res,K=+$("pK").value;cur.A=analyze(cur.s.pts,R,K);var A=cur.A;
+  if(cur.lap==null||cur.lap>=R.laps.length){
+    var j=R.laps.length-1;if(j===A.bi&&j>0)j--;cur.lap=j;
+  }
+  var sel=$("pLap");sel.innerHTML="";
+  R.laps.forEach(function(l,i){var o=document.createElement("option");o.value=i;o.textContent="Tour "+l.n+" · "+fmtT(l.ms)+(i===A.bi?" (meilleur)":"");sel.appendChild(o)});
+  sel.value=cur.lap;$("mLap").innerHTML=sel.innerHTML;$("mLap").value=cur.lap;$("mLap").hidden=false;$("cProg").hidden=false;$("legend").hidden=false;
+  renderLaps();renderProg();
+}
+function renderLaps(){
+  var R=cur.res,A=cur.A,T=$("laps"),best=R.laps[A.bi];
+  var h="<tr><th>Tour</th><th>Temps</th><th>vs meilleur</th><th>vs idéal</th><th>Moy.</th><th>Max</th><th>Dist.</th></tr>";
+  R.laps.forEach(function(l,i){
+    h+='<tr class="lap'+(i===A.bi?" best":"")+(i===cur.lap?" sel":"")+'" data-i="'+i+'"><td>'+l.n+"</td><td>"+fmtT(l.ms)+"</td><td>"+(i===A.bi?"–":fmtD(l.ms-best.ms))+
+    "</td><td>"+fmtD(l.ms-A.ideal)+"</td><td>"+l.vavg.toFixed(1)+"</td><td>"+l.vmax.toFixed(1)+"</td><td>"+(l.dist*1000).toFixed(0)+" m</td></tr>";
+  });
+  T.innerHTML=h;
+  Array.prototype.forEach.call(T.querySelectorAll("tr.lap"),function(tr){tr.onclick=function(){setLap(+tr.dataset.i,false)}});
+}
+function setLap(i,zoom){
+  stopPlay();cur.lap=i;$("pLap").value=i;$("mLap").value=i;renderLaps();renderProg();
+  if(zoom&&M.map){var l=cur.res.laps[i];M.map.fitBounds(cur.s.pts.slice(l.i0,l.i1+1).map(function(p){return[p.lat,p.lon]}))}
+}
+function renderProg(){
+  var A=cur.A,R=cur.res,j=cur.lap,mode=$("pRef").value,lap=R.laps[j],best=R.laps[A.bi];
+  var refMs=mode==="i"?A.ideal:best.ms;
+  $("refSw").style.background=mode==="i"?C_IDEAL:C_BEST;$("refNm").textContent=mode==="i"?"tour idéal":"meilleur tour";
+  var st=[["Meilleur tour",fmtT(best.ms)+" (n°"+best.n+")"],["Tour idéal",fmtT(A.ideal)],["Gain possible",(best.ms-A.ideal)/1000>0?"−"+((best.ms-A.ideal)/1000).toFixed(2)+" s":"0 s"],
+   ["Tour "+lap.n,fmtT(lap.ms)],["Écart à la réf.",fmtD(lap.ms-refMs)]];
+  $("pStats").innerHTML=st.map(function(x){return'<div class="stat"><span class="mut">'+x[0]+'</span><b>'+x[1]+'</b></div>'}).join("");
+  // conseils
+  var tips=advice(A,j,mode),TP=$("tips");TP.innerHTML="";
+  if(R.laps.length<2)TP.innerHTML='<p class="mut">Il faut au moins deux tours complets pour comparer.</p>';
+  else if(!tips.length){var d0=document.createElement("div");d0.className="tip good";
+    d0.innerHTML="<b>Rien à reprocher à ce tour</b> face à la référence choisie.";if(mode==="b"&&j===A.bi)d0.innerHTML+=" C’est ton meilleur tour : compare-le au <b>tour idéal</b> pour voir ce qu’il reste à gagner.";TP.appendChild(d0)}
+  else{
+    var tot=tips.reduce(function(a,t){return a+t.loss},0);
+    tips.slice(0,4).forEach(function(t){
+      var d=document.createElement("div");d.className="tip";
+      d.innerHTML="<b></b><div></div>";d.firstChild.textContent="Secteur "+(t.k+1)+" : "+fmtD(t.loss)+(mode==="i"?" (réf. tour "+R.laps[t.ref].n+")":"");
+      d.lastChild.textContent=t.why.join(" ; ")+".";d.onclick=function(){zoomSector(t.k)};TP.appendChild(d);
+    });
+    var p=document.createElement("p");p.className="mut";p.style.margin="4px 0 10px";
+    p.textContent="Au total, "+tips.length+" secteur(s) perdent "+(tot/1000).toFixed(2)+" s. Concentre-toi d’abord sur le premier : c’est là que le gain est le plus gros. Le GPS a une précision de l’ordre du mètre, donc les petits écarts de trajectoire sont à prendre avec recul.";
+    TP.appendChild(p);
+  }
+  // tableau des secteurs
+  var h="<tr><th>Secteur</th><th>Tour "+lap.n+"</th><th>Meilleur</th><th>(tour)</th><th>Écart</th><th></th></tr>",mxl=1;
+  for(var k=0;k<A.K;k++)mxl=Math.max(mxl,A.sect[j][k]-A.sect[A.win[k]][k]);
+  for(k=0;k<A.K;k++){
+    var w=A.win[k],me=A.sect[j][k],bs=A.sect[w][k],ls=me-bs;
+    h+="<tr><td>S"+(k+1)+"</td><td>"+(me/1000).toFixed(2)+"</td><td>"+(bs/1000).toFixed(2)+"</td><td>"+R.laps[w].n+'</td><td class="'+(ls<1?"gd":ls>=50?"lo":"")+'">'+(ls<1?"meilleur":fmtD(ls))+
+      '</td><td style="width:30%"><span class="bar" style="width:'+Math.round(100*ls/mxl)+'%"></span></td></tr>';
+  }
+  $("sect").innerHTML=h;
+  drawCmp();drawDist();drawEvo();
+}
+function zoomSector(k){
+  if(!M.map)return;var A=cur.A,pts=[];
+  [A.tr[cur.lap],A.tr[A.win[k]],A.tr[A.bi]].forEach(function(t){t.forEach(function(p){if(p.sr>=A.b[k]&&p.sr<=A.b[k+1])pts.push([p.lat,p.lon])})});
+  tab("Map");setTimeout(function(){M.map.invalidateSize();if(pts.length)M.map.fitBounds(pts,{padding:[30,30],maxZoom:19})},60);
+}
+function drawCmp(){
+  if(!M.map||!cur||!cur.A)return;M.cmp.clearLayers();var A=cur.A;
+  var ln=function(t){return t.map(function(p){return[p.lat,p.lon]})};
+  var cased=function(pts,c,o){L.polyline(pts,{color:"#000",weight:(o.weight||4)+3,opacity:.45}).addTo(M.cmp);L.polyline(pts,Object.assign({color:c,weight:4},o)).addTo(M.cmp)};
+  if($("vB").checked)cased(ln(A.tr[A.bi]),C_BEST,{});
+  if($("vI").checked)idealPath(A).forEach(function(sg){var pl=L.polyline(sg.pts,{color:C_IDEAL,weight:4,dashArray:"8 6"});
+    L.polyline(sg.pts,{color:"#fff",weight:6,opacity:.6}).addTo(M.cmp);pl.bindTooltip("Idéal S"+(sg.k+1)+" : tour "+cur.res.laps[sg.lap].n).addTo(M.cmp)});
+  if($("vA").checked&&cur.lap!==A.bi)cased(ln(A.tr[cur.lap]),C_LAP,{weight:3});
+  if($("vS").checked){var rf=A.tr[A.bi];for(var k=0;k<A.K;k++){var s=A.b[k]+(A.b[k+1]-A.b[k])/2;
+    L.circleMarker([at(rf,A.b[k],"lat"),at(rf,A.b[k],"lon")],{radius:4,color:"#000",fillColor:"#fff",fillOpacity:1,weight:2}).addTo(M.cmp);
+    L.marker([at(rf,s,"lat"),at(rf,s,"lon")],{opacity:0,interactive:false}).bindTooltip("S"+(k+1),{permanent:true,direction:"center",className:"sl"}).addTo(M.cmp)}}
+}
+function plot(id,series,o){
+  var c=$(id),r=window.devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight||150;c.width=w*r;c.height=h*r;
+  var g=c.getContext("2d");g.scale(r,r);var cs=getComputedStyle(document.body),Lm=36,ymin=o.ymin,ymax=o.ymax;if(ymax-ymin<1e-9)ymax=ymin+1;
+  var X=function(x){return Lm+(w-Lm-4)*x/o.xmax},Y=function(y){return h-16-(h-24)*(y-ymin)/(ymax-ymin)};
+  c._inv=function(px){return Math.max(0,Math.min(o.xmax,(px-Lm)/(w-Lm-4)*o.xmax))};
+  g.font="11px sans-serif";g.lineWidth=1;g.strokeStyle=cs.getPropertyValue("--bd");g.fillStyle=cs.getPropertyValue("--mut");
+  [ymin,(ymin+ymax)/2,ymax].forEach(function(v){g.beginPath();g.moveTo(Lm,Y(v));g.lineTo(w,Y(v));g.stroke();g.fillText(o.fy?o.fy(v):Math.round(v),2,Y(v)+4)});
+  (o.bounds||[]).forEach(function(b,i){g.setLineDash([3,3]);g.beginPath();g.moveTo(X(b),4);g.lineTo(X(b),h-16);g.stroke();g.setLineDash([]);
+    if(i<o.bounds.length-1)g.fillText("S"+(i+1),X(b)+2,h-4)});
+  if(o.zero){g.strokeStyle=cs.getPropertyValue("--mut");g.beginPath();g.moveTo(Lm,Y(0));g.lineTo(w,Y(0));g.stroke()}
+  series.forEach(function(sr){g.strokeStyle=sr.c;g.lineWidth=sr.w||1.8;g.beginPath();sr.xs.forEach(function(x,i){var y=Y(sr.ys[i]);i?g.lineTo(X(x),y):g.moveTo(X(x),y)});g.stroke()});
+  if(o.cursor!=null){g.strokeStyle="#1971c2";g.lineWidth=2;g.beginPath();g.moveTo(X(o.cursor),4);g.lineTo(X(o.cursor),h-16);g.stroke()}
+}
+function drawDist(){
+  if(!cur||!cur.A||$("cProg").hidden)return;var A=cur.A,j=cur.lap,mode=$("pRef").value,t=A.tr[j],n=300,xs=[],dl=[],vl=[],vr=[];
+  for(var i=0;i<=n;i++){var s=A.Lr*i/n;xs.push(s);dl.push((at(t,s,"t")-tRef(A,mode,s))/1000);vl.push(at(t,s,"v"));vr.push(vRef(A,mode,s))}
+  var cu=null;if(cur.sel!=null){var p=t.filter(function(q){return q.gi===cur.sel})[0];if(p)cu=p.sr}
+  var mn=Math.min(0,Math.min.apply(null,dl)),mx=Math.max(0,Math.max.apply(null,dl));
+  plot("cDelta",[{xs:xs,ys:dl,c:C_LAP,w:2}],{xmax:A.Lr,ymin:mn,ymax:mx,zero:true,bounds:A.b,cursor:cu,fy:function(v){return v.toFixed(1)}});
+  var vm=Math.max(Math.max.apply(null,vl),Math.max.apply(null,vr));
+  plot("cSpd",[{xs:xs,ys:vr,c:mode==="i"?C_IDEAL:C_BEST},{xs:xs,ys:vl,c:C_LAP}],{xmax:A.Lr,ymin:0,ymax:vm,bounds:A.b,cursor:cu});
+}
+function distClick(e,c){
+  if(!cur||!cur.A||!c._inv)return;var b=c.getBoundingClientRect(),s=c._inv(e.clientX-b.left),t=cur.A.tr[cur.lap],bi=0,bd=1e18;
+  t.forEach(function(p,i){var d=Math.abs(p.sr-s);if(d<bd){bd=d;bi=i}});selectPoint(t[bi].gi,"follow");
+}
+function scrub(c,fn){
+  var down=false;
+  c.addEventListener("pointerdown",function(e){down=true;stopPlay();try{c.setPointerCapture(e.pointerId)}catch(x){}fn(e,c)});
+  c.addEventListener("pointermove",function(e){if(down)fn(e,c)});
+  ["pointerup","pointercancel"].forEach(function(n){c.addEventListener(n,function(){down=false})});
+}
+scrub($("cDelta"),distClick);scrub($("cSpd"),distClick);
+function drawEvo(){
+  var c=$("cEvo"),r=window.devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight||150;c.width=w*r;c.height=h*r;var g=c.getContext("2d");g.scale(r,r);
+  var R=cur.res,A=cur.A,cs=getComputedStyle(document.body),ms=R.laps.map(function(l){return l.ms}),mn=Math.min(A.ideal,Math.min.apply(null,ms)),mx=Math.max.apply(null,ms);
+  var lo=mn-(mx-mn)*.25-200,Lm=44,n=ms.length,bw=(w-Lm)/n,Y=function(v){return h-16-(h-24)*(v-lo)/(mx-lo||1)};
+  g.font="11px sans-serif";g.fillStyle=cs.getPropertyValue("--mut");g.fillText(fmtT(mx),0,Y(mx)+4);g.fillText(fmtT(mn),0,Y(mn)+4);
+  ms.forEach(function(v,i){g.fillStyle=i===A.bi?C_BEST:i===cur.lap?C_LAP:cs.getPropertyValue("--mut");g.globalAlpha=i===A.bi||i===cur.lap?1:.45;
+    g.fillRect(Lm+i*bw+bw*.15,Y(v),bw*.7,h-16-Y(v));g.globalAlpha=1;if(bw>16){g.fillStyle=cs.getPropertyValue("--mut");g.fillText(String(R.laps[i].n),Lm+i*bw+bw/2-4,h-3)}});
+  g.strokeStyle=C_IDEAL;g.setLineDash([6,4]);g.lineWidth=2;g.beginPath();g.moveTo(Lm,Y(A.ideal));g.lineTo(w,Y(A.ideal));g.stroke();g.setLineDash([]);
+  g.fillStyle=C_IDEAL;g.fillText("idéal",w-34,Y(A.ideal)-4);
+  c._lap=function(px){return Math.max(0,Math.min(n-1,Math.floor((px-Lm)/bw)))};
+}
+$("cEvo").onclick=function(e){if(!cur||!cur.A)return;var b=e.currentTarget.getBoundingClientRect();setLap(e.currentTarget._lap(e.clientX-b.left),false)};
+$("pLap").onchange=function(){setLap(+this.value,false)};
+$("mLap").onchange=function(){setLap(+this.value,false);var l=cur.res.laps[+this.value];if(l)selectPoint(l.i0,false)};
+$("pRef").onchange=function(){if(cur&&cur.A)renderProg()};
+$("pK").onchange=function(){if(cur&&cur.A)analyzeNow()};
+["vB","vI","vA","vS"].forEach(function(i){$(i).onchange=drawCmp});
+function drawChart(){
+  if(!cur)return;var c=$("chart"),r=window.devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight||150;c.width=w*r;c.height=h*r;
+  var g=c.getContext("2d");g.scale(r,r);var P=cur.s.pts,t0=P[0].t,T=P[P.length-1].t-t0||1,mx=cur.mx||1,cs=getComputedStyle(document.body);
+  var X=function(t){return 30+(w-30)*(t-t0)/T},Y=function(v){return h-16-(h-24)*v/mx};
+  g.strokeStyle=cs.getPropertyValue("--bd");g.fillStyle=cs.getPropertyValue("--mut");g.font="11px sans-serif";
+  [0,.5,1].forEach(function(f){g.beginPath();g.moveTo(30,Y(mx*f));g.lineTo(w,Y(mx*f));g.stroke();g.fillText(Math.round(mx*f),2,Y(mx*f)+4)});
+  g.strokeStyle=cs.getPropertyValue("--ac");g.lineWidth=1.5;g.beginPath();
+  P.forEach(function(p,i){i?g.lineTo(X(p.t),Y(p.v)):g.moveTo(X(p.t),Y(p.v))});g.stroke();
+  g.strokeStyle=cs.getPropertyValue("--mut");g.lineWidth=1;
+  cur.res.cross.forEach(function(k){g.beginPath();g.moveTo(X(k.t),4);g.lineTo(X(k.t),h-16);g.stroke()});
+  if(cur.sel!=null){g.strokeStyle="#1971c2";g.lineWidth=2;g.beginPath();g.moveTo(X(P[cur.sel].t),4);g.lineTo(X(P[cur.sel].t),h-16);g.stroke()}
+}
+function nearest(ll){
+  var P=cur.s.pts,best=0,bd=1e18,c=Math.cos(ll.lat*Math.PI/180);
+  P.forEach(function(p,i){var d=Math.pow(p.lat-ll.lat,2)+Math.pow((p.lon-ll.lng)*c,2);if(d<bd){bd=d;best=i}});return best;
+}
+function resetPt(){$("ptInfo").innerHTML='<span class="mut">Touche le tracé de la carte ou une courbe.</span>';if(M.mk)M.mk.clearLayers();M.pm=null;if(M.info)M.info.textContent=""}
+function atT(tr,t,key){
+  var lo=0,hi=tr.length-1;if(t<=tr[0].t)return tr[0][key];if(t>=tr[hi].t)return tr[hi][key];
+  while(hi-lo>1){var m=(lo+hi)>>1;if(tr[m].t<t)lo=m;else hi=m}
+  var a=tr[lo],b=tr[hi],f=(t-a.t)/((b.t-a.t)||1);return a[key]+f*(b[key]-a[key]);
+}
+/* ---------- Replay ---------- */
+var RP={on:false};
+function stopPlay(){RP.on=false;var b=$("bPlay");if(b)b.textContent="▶"}
+function playToggle(){
+  if(RP.on){stopPlay();return}if(!cur)return;
+  var P=cur.s.pts,lap=cur.A?cur.res.laps[cur.lap]:null,i0=lap?lap.i0:0,i1=lap?lap.i1:P.length-1;
+  var st=cur.sel!=null&&cur.sel>=i0&&cur.sel<i1-1?cur.sel:i0;
+  RP={on:true,i:st,i1:i1,t0:P[st].t,w0:performance.now()};$("bPlay").textContent="⏸";
+  if(st===i0)selectPoint(st,true);requestAnimationFrame(playStep);
+}
+function playStep(now){
+  if(!RP.on||!cur)return;var P=cur.s.pts,t=RP.t0+(now-RP.w0)*(+$("rSpd").value||1),i=RP.i;
+  while(i<RP.i1&&P[i+1].t<=t)i++;
+  if(i!==RP.i){RP.i=i;selectPoint(i,"follow")}
+  if(i>=RP.i1){stopPlay();return}
+  requestAnimationFrame(playStep);
+}
+function toggleFs(force){
+  var m=$("map");if(!M.map)return;var on=force!=null?force:!m.classList.contains("fs");m.classList.toggle("fs",on);
+  $("bFs").textContent=on?"✕":"⛶";document.body.style.overflow=on?"hidden":"";
+  setTimeout(function(){M.map.invalidateSize()},60);
+}
+function selectPoint(i,pan){
+  var P=cur.s.pts;i=Math.max(0,Math.min(P.length-1,i));cur.sel=i;
+  var p=P[i],q=P[i-1],r=P[i+1]||p,a=q||p,f=Math.PI/180,brg=null,acc=null;
+  if(r!==a){
+    var y=Math.sin((r.lon-a.lon)*f)*Math.cos(r.lat*f),x=Math.cos(a.lat*f)*Math.sin(r.lat*f)-Math.sin(a.lat*f)*Math.cos(r.lat*f)*Math.cos((r.lon-a.lon)*f);
+    brg=(Math.atan2(y,x)/f+360)%360;if(r.t>a.t)acc=(r.v-a.v)/3.6/((r.t-a.t)/1000);
+  }
+  var D=["N","NE","E","SE","S","SO","O","NO"],d=new Date(p.t),li=-1;
+  cur.res.laps.forEach(function(l,k){if(i>=l.i0&&i<=l.i1)li=k});var lap=cur.res.laps[li];
+  var c=[["Point",(i+1)+" / "+P.length],["Heure",d.toLocaleTimeString("fr-FR")+"."+String(p.t%1000).padStart(3,"0")],["Date",d.toLocaleDateString("fr-FR")],
+   ["UTC",d.toISOString()],["Depuis le départ",fmtT(p.t-P[0].t)],["Vitesse",p.v.toFixed(1)+" km/h"],["Vitesse (nœuds)",(p.v/1.852).toFixed(1)+" kt"],
+   ["Altitude",p.alt===null?"–":p.alt.toFixed(1)+" m"],["Latitude",p.lat.toFixed(6)],["Longitude",p.lon.toFixed(6)],["Distance parcourue",cur.cum[i].toFixed(3)+" km"],
+   ["Cap",brg===null?"–":Math.round(brg)+"° "+D[Math.round(brg/45)%8]],["Accélération",acc===null?"–":acc.toFixed(2)+" m/s²"],["Intervalle GPS",q?(p.t-q.t)+" ms":"–"]];
+  if(lap){c.push(["Tour",String(lap.n)],["Temps dans le tour",fmtT(p.t-cur.res.cross[lap.n-1].t)],["Distance dans le tour",((cur.cum[i]-cur.cum[lap.i0])*1000).toFixed(0)+" m"]);
+    if(cur.A){var tp=cur.A.tr[li].filter(function(z){return z.gi===i})[0],mode=$("pRef").value;
+      if(tp){var k=secOf(cur.A,tp.sr);c.push(["Secteur","S"+(k+1)],["Écart à la réf. ici",fmtD(tp.t-tRef(cur.A,mode,tp.sr))],["Vitesse réf. ici",vRef(cur.A,mode,tp.sr).toFixed(1)+" km/h"])}}}
+  $("ptInfo").innerHTML=c.map(function(x){return'<div class="stat"><span class="mut">'+x[0]+'</span><b>'+x[1]+'</b></div>'}).join("");
+  if(M.map){
+    var ll=[p.lat,p.lon],gh=null,inf="Tour "+(lap?lap.n:"–")+" · "+p.v.toFixed(1)+" km/h";
+    if(!M.pm||!M.mk.hasLayer(M.pm)){M.mk.clearLayers();M.gm=L.circleMarker(ll,{radius:8,color:"#fff",fillColor:C_BEST,fillOpacity:1,weight:3});M.pm=L.circleMarker(ll,{radius:9,color:"#000",fillColor:"#fff",fillOpacity:1,weight:3}).addTo(M.mk)}
+    M.pm.setLatLng(ll);
+    if(lap&&cur.A&&li!==cur.A.bi){var tp2=cur.A.tr[li].filter(function(z){return z.gi===i})[0];
+      if(tp2){var rt=cur.A.tr[cur.A.bi];gh=[atT(rt,tp2.t,"lat"),atT(rt,tp2.t,"lon")];inf+=" · "+fmtD(tp2.t-tRef(cur.A,$("pRef").value,tp2.sr))}}
+    if(gh){M.gm.setLatLng(gh);if(!M.mk.hasLayer(M.gm))M.gm.addTo(M.mk);M.pm.bringToFront()}else if(M.mk.hasLayer(M.gm))M.mk.removeLayer(M.gm);
+    M.info.textContent=inf;
+    if(pan==="follow"){if(!M.map.getBounds().pad(-.15).contains(ll))M.map.panTo(ll,{animate:false})}else if(pan)M.map.panTo(ll);
+  }
+  if(cur.A&&li>=0&&li!==cur.lap){cur.lap=li;$("pLap").value=li;$("mLap").value=li;renderLaps();renderProg()}else drawDist();
+  drawChart();
+}
+scrub($("chart"),function(e,c){
+  if(!cur)return;var b=c.getBoundingClientRect(),P=cur.s.pts,t=P[0].t+(e.clientX-b.left-30)/(b.width-30)*(P[P.length-1].t-P[0].t),i=0;
+  while(i<P.length-1&&P[i].t<t)i++;selectPoint(i,"follow");
+});
+Array.prototype.forEach.call(document.querySelectorAll("[data-s]"),function(b){b.onclick=function(){stopPlay();if(cur)selectPoint((cur.sel==null?0:cur.sel)+ +b.dataset.s,true)}});
+document.addEventListener("keydown",function(e){
+  if(!cur||/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;
+  if(e.key==="Escape"&&$("map").classList.contains("fs"))toggleFs(false);
+  if(e.key===" "){playToggle();e.preventDefault();return}
+  if(e.key==="ArrowRight"||e.key==="ArrowLeft"){selectPoint((cur.sel==null?0:cur.sel)+(e.key==="ArrowRight"?1:-1),true);e.preventDefault()}
+});
+$("mCol").onchange=drawTrack;
+$("bLine").onclick=function(){lineMode=!lineMode;this.textContent=lineMode?"Clique sur le tracé…":"Placer la ligne d’arrivée"};
+window.addEventListener("resize",function(){drawChart();if(cur&&cur.A){drawDist();drawEvo()}});
+/* ---------- Exports ---------- */
+$("bGpx").onclick=function(){
+  if(!cur)return;var x='<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Raptor Reader" xmlns="http://www.topografix.com/GPX/1/1">\n<trk><name>Raptor session '+cur.s.ix+'</name><trkseg>\n';
+  cur.s.pts.forEach(function(p){x+='<trkpt lat="'+p.lat+'" lon="'+p.lon+'">'+(p.alt!==null?"<ele>"+p.alt+"</ele>":"")+"<time>"+new Date(p.t).toISOString()+"</time></trkpt>\n"});
+  x+="</trkseg></trk>\n";
+  if(cur.A){x+="<trk><name>Trajectoire idéale ("+fmtT(cur.A.ideal)+")</name><trkseg>\n";
+    idealPath(cur.A).forEach(function(sg){sg.pts.forEach(function(p){x+='<trkpt lat="'+p[0]+'" lon="'+p[1]+'"></trkpt>\n'})});x+="</trkseg></trk>\n"}
+  file("raptor-session-"+cur.s.ix+".gpx",x+"</gpx>\n","application/gpx+xml");
+};
+$("bCsv").onclick=function(){
+  if(!cur)return;var c="time_utc,latitude,longitude,speed_kmh,altitude_m\n";
+  cur.s.pts.forEach(function(p){c+=[new Date(p.t).toISOString(),p.lat,p.lon,p.v.toFixed(2),p.alt===null?"":p.alt].join(",")+"\n"});
+  file("raptor-session-"+cur.s.ix+".csv",c,"text/csv");
+};
+$("bLcsv").onclick=function(){
+  if(!cur)return;var A=cur.A,c="tour,temps_s,temps,vitesse_moy_kmh,vitesse_max_kmh,distance_m"+(A?A.sect[0].map(function(_,k){return",S"+(k+1)+"_s"}).join(""):"")+"\n";
+  cur.res.laps.forEach(function(l,j){c+=[l.n,(l.ms/1000).toFixed(2),fmtT(l.ms),l.vavg.toFixed(1),l.vmax.toFixed(1),(l.dist*1000).toFixed(0)].concat(A?A.sect[j].map(function(v){return(v/1000).toFixed(3)}):[]).join(",")+"\n"});
+  if(A)c+=["idéal",(A.ideal/1000).toFixed(2),fmtT(A.ideal),"","",""].concat(A.win.map(function(w,k){return(A.sect[w][k]/1000).toFixed(3)})).join(",")+"\n";
+  file("raptor-tours-"+cur.s.ix+".csv",c,"text/csv");
+};
+$("bConn").onclick=function(){connect(false)};
+$("bAll").onclick=function(){connect(true)};
+$("bRef").onclick=function(){if(dev&&dev.gatt.connected)loadList()};
+$("bDlAll").onclick=dlAll;
+if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
+/* ---------- Onglets, affichage, installation ---------- */
+function tab(n){
+  Array.prototype.forEach.call(document.querySelectorAll("section.tab"),function(s){s.classList.toggle("on",s.id==="t"+n)});
+  Array.prototype.forEach.call(document.querySelectorAll("#tabs button"),function(b){b.classList.toggle("on",b.dataset.t===n)});
+  if(n!=="Map"){stopPlay();if($("map").classList.contains("fs"))toggleFs(false)}
+  window.scrollTo(0,0);try{sessionStorage.rr_tab=n}catch(e){}
+  setTimeout(function(){if(n==="Map"&&M.map)M.map.invalidateSize();if(cur){drawChart();if(cur.A){drawDist();drawEvo()}}},40);
+}
+Array.prototype.forEach.call(document.querySelectorAll("#tabs button"),function(b){b.onclick=function(){tab(b.dataset.t)}});
+function setCompact(on){document.body.classList.toggle("compact",on);$("cCompact").checked=on;try{localStorage.rr_compact=on?"1":""}catch(e){}if(cur)setTimeout(function(){if(M.map)M.map.invalidateSize();drawChart();if(cur.A){drawDist();drawEvo()}},40)}
+$("cCompact").onchange=function(){setCompact(this.checked)};
+try{setCompact(localStorage.rr_compact==="1")}catch(e){}
+var dP=null,standalone=window.matchMedia&&matchMedia("(display-mode: standalone)").matches;
+function appInfo(t){$("appInfo").textContent=t}
+if(standalone)appInfo("Application installée. Elle fonctionne hors ligne ; la carte reste disponible pour les zones déjà affichées avec du réseau.");
+else if(!/^https?:/.test(location.protocol))appInfo("Ouverte comme fichier local : l’installation et le hors-ligne ne marchent que sur la page hébergée (GitHub Pages).");
+else appInfo("Pour l’installer : bouton ci-dessous, ou menu ⋮ de Chrome → « Installer l’application » / « Ajouter à l’écran d’accueil ».");
+window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();dP=e;$("bInst").hidden=false});
+window.addEventListener("appinstalled",function(){$("bInst").hidden=true;appInfo("Application installée : retrouve-la sur l’écran d’accueil.")});
+$("bInst").onclick=async function(){if(!dP)return;dP.prompt();try{await dP.userChoice}catch(e){}dP=null;$("bInst").hidden=true};
+if("serviceWorker" in navigator&&/^https?:/.test(location.protocol))navigator.serviceWorker.register("sw.js").catch(function(e){log("sw: "+e)});
+refreshLocal().then(function(all){var t="";try{t=sessionStorage.rr_tab||""}catch(e){}tab(t==="Box"||t==="Ses"?t:(all&&all.length?"Ses":"Box"))});
+</script>
+</body>
+</html>
